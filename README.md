@@ -87,7 +87,7 @@ Each `run` writes `results/<experiment>-<timestamp>.jsonl` (one row per record: 
 | `src/run/` | Concurrency-bounded runner, report renderer |
 | `experiments/` | One file per experiment |
 | `samples/` | Small inputs for the shipped experiments |
-| `docs/` | `jev-prompting.md` (how to write questions), `decisions.md`, `llm-comparison.md` (planned) |
+| `docs/` | `jev-prompting.md` (how to write questions), `decisions.md`, `llm-comparison.md` (planned), `ideas/` (unbuilt experiment write-ups) |
 
 ## Development guide
 

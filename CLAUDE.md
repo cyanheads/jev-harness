@@ -50,6 +50,7 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 - `docs/decisions.md` — append-only decisions with rationale; add an entry when you change a default.
 - `docs/jev-prompting.md` — question-writing rules; re-check the live jaggedness page when a new Jev version ships.
 - `docs/llm-comparison.md` — the planned `--via <model>` comparison mode, not built.
+- `docs/ideas/` — write-ups of experiments worth running later, one file each with status, design, evaluation plan, and kill criteria: `literal-client-probe.md` (Jev as a weak-client reader of MCP tool descriptions), `tool-ranker.md` (Jev as a reranker for tool search). Add a file here when an idea is worth keeping; re-read its open questions before building from one.
 - `changelog/` — one file per version; `CHANGELOG.md` is generated (`bun run changelog:build`), never hand-edited.
 - `samples/` — small synthetic inputs; `results/` — run output, gitignored.
 
