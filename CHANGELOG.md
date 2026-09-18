@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.4.0](changelog/0.4.x/0.4.0.md) — 2026-09-18 · ⚠️ Breaking
+
+CLI flags are validated, `--dry-run` previews the provider the real call would use, repeated record ids are rejected, and `calibrate` reports the truth values it could not score.
+
 ## [0.3.1](changelog/0.3.x/0.3.1.md) — 2026-09-18
 
 `mcp-error-triage` judges clarity on the message plus the recovery hint the caller was shown, and holds a `server` disagreement to 0.75.

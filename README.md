@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-0.3.1-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
 
 </div>
 
@@ -22,11 +22,11 @@
 | `bun run jev list` | List experiments under `experiments/` |
 | `bun run jev calibrate --rows <rows.jsonl> --truth <truth.jsonl>` | Reliability tables, accuracy, Brier score, and calibration error for each Choice and Noul against known answers |
 | `bun run jev stability <rows.jsonl> <rows.jsonl>...` | Largest run-to-run difference per question across repeated runs of the same records |
-| `--dry-run` (on `run` or `ask`) | Print the first request payload and exit without calling Jev |
+| `--dry-run` (on `run` or `ask`) | Print the first request payload, for the provider and model the real call would use, and exit without calling Jev |
 
-`run` flags: `--input <path\|->` (JSONL, JSON array, text file, directory, or stdin) · `--out results/` · `--limit N` · `--concurrency 8` · `--model M` · `--provider openrouter\|typesafe` · `--keep-input` · `--keep-state`.
+`run` flags: `--input <path\|->` (JSONL, JSON array, text file, directory, or stdin) · `--out results/` · `--limit N` · `--concurrency 8` · `--model M` · `--provider openrouter\|typesafe` · `--keep-input` · `--keep-state`. Record ids must be unique within an input; rows are joined on them.
 
-`calibrate` truth lines are `{"id": "...", "truth": {"<question>": "<option>" | true | false}}`; `--bins N` sets the bin count (default 10).
+`calibrate` truth lines are `{"id": "...", "truth": {"<question>": "<option>" | true | false}}`; `--bins N` sets the bin count (default 10). Truth values it cannot score (no such answer, the wrong kind, an undeclared option) are counted per question under the tables. A Choice's bins and calibration error grade its `confidence`; its Brier score grades the per-option probabilities.
 
 `ask` question flags: `--noul "id=question"` · `--choice "id=question|optA,optB"` · `--score "id=question|level0,level1,level2"`. The `id=` prefix is optional.
 
@@ -84,7 +84,7 @@ Each `run` writes `results/<experiment>-<timestamp>.jsonl` (one row per record: 
 | Path | Purpose |
 |:---|:---|
 | `bin/jev.ts` | The CLI |
-| `src/client/` | HTTP client for both providers: retries (429, 5xx, timeouts), response validation, cost and latency per call |
+| `src/client/` | HTTP client for both providers: retries (408, 429, 5xx, timeouts), response validation, cost and latency per call |
 | `src/questions/` | `choice` / `score` / `noul` builders, wire schemas, answer-type inference |
 | `src/experiments/` | `defineExperiment`, experiment loader |
 | `src/input/` | Input path → records (JSONL, JSON, text, directory, stdin) |
