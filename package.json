@@ -27,6 +27,14 @@
     "bun": ">=1.3",
     "node": ">=24"
   },
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./questions": "./src/questions/index.ts",
+    "./experiments": "./src/experiments/index.ts",
+    "./input": "./src/input/index.ts",
+    "./run": "./src/run/index.ts"
+  },
   "scripts": {
     "jev": "bun run bin/jev.ts",
     "typecheck": "tsc --noEmit",
