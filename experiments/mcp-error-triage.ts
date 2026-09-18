@@ -1,15 +1,18 @@
 /**
  * experiments/mcp-error-triage.ts
  *
- * Triage errors from hosted MCP servers. Input records carry the shape the
- * RemoteSysAdmin `collect-mcp-errors.ts` digest groups by (`scope`, `message`,
- * `errorCode`, `statusCode`, `count`, `kind`) plus `container` and the
- * script's heuristic `errorClass` (INPUT / UPSTREAM / CAPACITY / SERVER).
+ * Second reader for errors from hosted MCP servers. Input records carry the
+ * shape RemoteSysAdmin's `collect-mcp-errors.ts --json` emits (`container`,
+ * `scope`, `message`, `toolMessage`, `errorCode`, `statusCode`, `count`, `kind`,
+ * and the script's rule-based `errorClass`), or the same shape collapsed across
+ * tools by `triage-mcp-errors.ts`, which adds `tools`.
  *
- * Two things this measures: whether Jev's origin call agrees with the
- * heuristic classifier, and — the DX angle — whether the error message itself
- * tells the calling model what to do next. `errorClass` is deliberately kept
- * out of the state so Jev judges the error, not the label.
+ * Two questions, the two that held up on real data (docs/findings.md): whether
+ * Jev's origin call agrees with the rule-based one, and whether the text the
+ * caller was shown says what went wrong. `errorClass` stays out of the state so
+ * Jev judges the error, not the label. How often an error happened is not asked
+ * about and not sent: a count sorts itself, and a severity question that saw it
+ * only restated it.
  *
  * Sample input: samples/mcp-errors.jsonl
  */
@@ -21,34 +24,39 @@ interface McpError {
   readonly container: string;
   readonly kind: 'tool' | 'transport';
   readonly scope: string;
+  /** Every tool the pattern appeared on, when the input was collapsed across tools. */
+  readonly tools?: readonly string[];
+  /** The most specific detail the logs hold — often the upstream response body. */
   readonly message: string;
+  /** What the caller was shown, when that differs from `message`. */
+  readonly toolMessage?: string;
   readonly errorClass: 'INPUT' | 'UPSTREAM' | 'CAPACITY' | 'SERVER';
   readonly errorCode: string;
   readonly statusCode?: number;
   readonly count?: number;
 }
 
-/**
- * Escalate when the probability mass on "Needs a fix" and "Outage-class" together
- * reaches this. The top level's own confidence is a poor gate on a four-level
- * Score: it averaged 0.55 on a real week of errors, so a 0.6 bar passed 1% of rows.
- */
-const ESCALATE_MIN_MASS = 0.8;
+/** Below this, a disagreement with the rules was usually Jev's mistake, not theirs. */
+const DISAGREE_MIN_CONFIDENCE = 0.6;
 /** A weighted clarity score below this lands on "Opaque". */
 const OPAQUE_BELOW = 0.5;
+/** Long SQL and HTML bodies carry their signal in the first few hundred characters. */
+const MAX_TEXT = 600;
+const MAX_TOOLS = 5;
 
 export default defineExperiment({
   name: 'mcp-error-triage',
-  description: 'Classify hosted MCP server errors by origin, severity, and error-message clarity.',
+  description:
+    'Second reader for hosted MCP server errors: origin against the rules, and clarity of the text shown to the caller.',
   questions: {
     origin: choice(
       {
         question: 'Who is responsible for this error?',
-        focus: 'Judge from `error.message`, `error.errorCode`, and `error.statusCode` only.',
+        focus: 'Judge from the `error` fields only.',
       },
       {
         input: {
-          what: 'The calling model sent a bad request: invalid or missing parameter, malformed ID, wrong format, unknown tool.',
+          what: 'The calling model sent a bad request: invalid or missing parameter, malformed ID, wrong format, unknown tool, or a lookup that matched nothing.',
           examples: ['validation failed', 'Invalid params', 'required field', 'not found for id'],
         },
         upstream: {
@@ -61,43 +69,43 @@ export default defineExperiment({
         server: {
           what: 'A bug in the server: unhandled exception, type error, null access, assertion, internal error with no upstream cause.',
         },
-        unclear: 'The message does not contain enough to tell.',
+        unclear: 'The error does not contain enough to tell.',
       },
     ),
-    severity: score('How serious is this error for the operator of the server?', [
-      'Noise: expected rejection of bad input or a transient upstream blip; nothing to do.',
-      'Worth a look: recurring or unusual, but the service keeps working.',
-      'Needs a fix: a real bug or a systematic misuse the tool description could prevent.',
-      'Outage-class: the tool or the whole server is unusable.',
-    ]),
     message_clarity: score(
-      'How well does `error.message` tell the caller what went wrong and how to fix the call?',
+      {
+        question:
+          'How well does `error.shown_to_caller` tell the caller what went wrong and how to fix the call?',
+        focus: 'Judge `error.shown_to_caller` only. `error.upstream_detail` was never shown.',
+      },
       [
-        'Opaque: a generic or internal message with no usable detail.',
+        'Opaque: a generic or internal message, a bare status code, or markup, with no usable detail.',
         'Names the cause: says which field or condition failed.',
-        'Names the cause and the remedy: says what a valid call looks like.',
+        'Names the cause and the remedy: says what a valid call looks like or what to do next.',
       ],
     ),
   },
   state: (record: McpError) => ({
     server: record.container,
-    tool: record.scope,
+    tool: (record.tools ?? [record.scope]).slice(0, MAX_TOOLS).join(', '),
     error: {
       kind: record.kind,
       errorCode: record.errorCode,
       ...(record.statusCode !== undefined && { statusCode: String(record.statusCode) }),
-      message: record.message,
-      occurrences: String(record.count ?? 1),
+      shown_to_caller: (record.toolMessage ?? record.message).slice(0, MAX_TEXT),
+      ...(record.toolMessage !== undefined && {
+        upstream_detail: record.message.slice(0, MAX_TEXT),
+      }),
     },
   }),
   derive: (answers, record) => {
     const heuristic = record.errorClass.toLowerCase();
-    const levels = answers.severity.probabilities;
+    const { choice: origin, confidence } = answers.origin;
     return {
       heuristic,
       /** A disagreement is a review queue: either side can be the one that is wrong. */
-      agrees_with_heuristic: answers.origin.choice === heuristic,
-      escalate: (levels['2'] ?? 0) + (levels['3'] ?? 0) >= ESCALATE_MIN_MASS,
+      origin_disagrees:
+        origin !== heuristic && origin !== 'unclear' && confidence >= DISAGREE_MIN_CONFIDENCE,
       opaque_message: answers.message_clarity.score < OPAQUE_BELOW,
     };
   },
