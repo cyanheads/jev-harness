@@ -1,6 +1,6 @@
 # Planned: run an experiment through an LLM for comparison
 
-Not built. Tracked in the repo's issues.
+Not built. Tracked in [#1](https://github.com/cyanheads/jev-harness/issues/1).
 
 ## What
 
