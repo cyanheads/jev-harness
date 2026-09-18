@@ -64,11 +64,12 @@ export async function runExperiment(
     while (next < records.length && !fatal) {
       const record = records[next++];
       if (!record) return;
+      let row: RunRow;
       try {
         const state = experiment.state(record.data);
         const result = await client.ask(state, experiment.questions);
         const derived = experiment.derive?.(result.answers, record.data);
-        const row: RunRow = {
+        row = {
           id: record.id,
           experiment: experiment.name,
           model: result.model,
@@ -81,8 +82,6 @@ export async function runExperiment(
           ...(options.keepInput && { input: record.data }),
           ...(options.keepState && { state }),
         };
-        rows.push(row);
-        await options.onRow?.(row);
       } catch (error) {
         if (error instanceof JevHttpError && error.isAuthFailure) {
           fatal ??= error;
@@ -94,7 +93,11 @@ export async function runExperiment(
         };
         failures.push(failure);
         await options.onFailure?.(failure);
+        continue;
       }
+      // Outside the try: a sink that cannot take the row ends the run, not the record.
+      rows.push(row);
+      await options.onRow?.(row);
     }
   }
 

@@ -66,6 +66,22 @@ describe('runExperiment', () => {
     expect(outcome.rows[0]?.input).toBeUndefined();
   });
 
+  test('a throwing onRow ends the run instead of filing the record as a failure', async () => {
+    const client = clientWith(() => ok('billing', 0.2));
+    const failures: string[] = [];
+    await expect(
+      runExperiment(client, experiment, [{ id: 'a', data: { text: 'x' } }], {
+        onRow: () => {
+          throw new Error('disk full');
+        },
+        onFailure: (f) => {
+          failures.push(f.id);
+        },
+      }),
+    ).rejects.toThrow('disk full');
+    expect(failures).toEqual([]);
+  });
+
   test('stops at the first auth failure instead of failing every record', async () => {
     let calls = 0;
     const client = clientWith(() => {
