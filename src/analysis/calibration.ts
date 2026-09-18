@@ -2,17 +2,29 @@
  * src/analysis/calibration.ts
  *
  * Reliability of Jev's probabilities against known answers. For a Choice the
- * prediction is the confidence of the chosen option and the outcome is whether
- * that option was correct; for a Noul the prediction is the probability and the
- * outcome is the true/false label. Scores carry no comparable truth and are
- * skipped. A well-calibrated question has `observed` tracking `meanPredicted`
- * in every bin.
+ * prediction is the answer's `confidence` — how peaked the distribution is, not
+ * the chosen option's probability — and the outcome is whether the chosen option
+ * was correct; for a Noul the prediction is the probability and the outcome is
+ * the true/false label. So a Choice's bins and ECE grade `confidence` while its
+ * Brier score grades the per-option probabilities. A well-calibrated question
+ * has `observed` tracking `meanPredicted` in every bin.
+ *
+ * A truth value that cannot be scored is counted under `skipped`, never dropped
+ * silently: the row has no such answer, the truth is the wrong kind for the
+ * answer type (any truth for a Score), or a Choice truth names no declared option.
  */
 
+import { z } from 'zod';
 import type { RunRow } from '../run/index.ts';
 
 /** Correct answers for one record: question id → option key (Choice) or boolean (Noul). */
 export type Truth = Readonly<Record<string, string | boolean>>;
+
+/** One line of a hand-written truth file. The id is compared as a string, like a row's. */
+export const truthLineSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  truth: z.record(z.string(), z.union([z.string(), z.boolean()])),
+});
 
 export interface ReliabilityBin {
   readonly lo: number;
@@ -37,6 +49,12 @@ export interface QuestionCalibration {
   readonly bins: readonly ReliabilityBin[];
 }
 
+export interface Calibration {
+  readonly questions: readonly QuestionCalibration[];
+  /** Truth values that could not be scored, by question id. */
+  readonly skipped: Readonly<Record<string, number>>;
+}
+
 interface Point {
   readonly predicted: number;
   readonly outcome: boolean;
@@ -48,17 +66,20 @@ export function calibrate(
   rows: readonly RunRow[],
   truth: ReadonlyMap<string, Truth>,
   binCount = 10,
-): QuestionCalibration[] {
+): Calibration {
   const points = new Map<string, { type: 'choice' | 'noul'; points: Point[] }>();
+  const skipped: Record<string, number> = {};
   for (const row of rows) {
     const answers = truth.get(row.id);
     if (!answers) continue;
     for (const [question, expected] of Object.entries(answers)) {
       const answer = row.answers[question];
-      if (!answer) continue;
       let point: Point | undefined;
-      if (answer.type === 'choice' && typeof expected === 'string') {
-        if (!(expected in answer.probabilities)) continue;
+      if (
+        answer?.type === 'choice' &&
+        typeof expected === 'string' &&
+        expected in answer.probabilities
+      ) {
         const correct = answer.choice === expected;
         point = {
           predicted: answer.confidence,
@@ -69,7 +90,7 @@ export function calibrate(
             0,
           ),
         };
-      } else if (answer.type === 'noul' && typeof expected === 'boolean') {
+      } else if (answer?.type === 'noul' && typeof expected === 'boolean') {
         point = {
           predicted: answer.noul,
           outcome: expected,
@@ -77,14 +98,17 @@ export function calibrate(
           squaredError: (answer.noul - (expected ? 1 : 0)) ** 2,
         };
       }
-      if (!point) continue;
+      if (!point || !answer) {
+        skipped[question] = (skipped[question] ?? 0) + 1;
+        continue;
+      }
       const entry = points.get(question) ?? { type: answer.type as 'choice' | 'noul', points: [] };
       entry.points.push(point);
       points.set(question, entry);
     }
   }
 
-  return [...points.entries()].map(([question, { type, points: pts }]) => {
+  const questions = [...points.entries()].map(([question, { type, points: pts }]) => {
     const bins = toBins(pts, binCount);
     return {
       question,
@@ -99,6 +123,7 @@ export function calibrate(
       bins,
     };
   });
+  return { questions, skipped };
 }
 
 function toBins(points: readonly Point[], binCount: number): ReliabilityBin[] {
@@ -122,9 +147,9 @@ function toBins(points: readonly Point[], binCount: number): ReliabilityBin[] {
   );
 }
 
-export function renderCalibration(results: readonly QuestionCalibration[]): string {
+export function renderCalibration({ questions, skipped }: Calibration): string {
   const lines: string[] = [];
-  for (const r of results) {
+  for (const r of questions) {
     lines.push(
       `[${r.type}] ${r.question} — n ${r.n} · accuracy ${(r.accuracy * 100).toFixed(1)}% · brier ${r.brier.toFixed(3)} · ece ${r.ece.toFixed(3)}`,
       '  bin          n   predicted  observed   gap',
@@ -136,6 +161,13 @@ export function renderCalibration(results: readonly QuestionCalibration[]): stri
       );
     }
     lines.push('');
+  }
+  const skips = Object.entries(skipped);
+  if (skips.length > 0) {
+    lines.push(
+      'skipped — truth values with no matching answer, the wrong kind, or an undeclared option',
+      ...skips.map(([question, count]) => `  ${question}: ${count}`),
+    );
   }
   return lines.join('\n');
 }

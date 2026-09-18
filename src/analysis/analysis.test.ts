@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Answer } from '../questions/index.ts';
 import type { RunRow } from '../run/index.ts';
-import { calibrate, stability, type Truth } from './index.ts';
+import { calibrate, renderCalibration, stability, type Truth } from './index.ts';
 
 function row(id: string, answers: Record<string, Answer>): RunRow {
   return {
@@ -30,7 +30,7 @@ describe('calibrate', () => {
       ['a', { kind: 'bug' }],
       ['b', { kind: 'feat' }],
     ]);
-    const [result] = calibrate(rows, truth);
+    const [result] = calibrate(rows, truth).questions;
     expect(result?.n).toBe(2);
     expect(result?.accuracy).toBe(0.5);
     expect(result?.bins).toHaveLength(1);
@@ -48,15 +48,20 @@ describe('calibrate', () => {
       ['a', { flag: true }],
       ['b', { flag: false }],
     ]);
-    const [result] = calibrate(rows, truth);
-    expect(result?.n).toBe(2);
-    expect(result?.accuracy).toBe(1);
-    expect(result?.brier).toBeCloseTo(0.01);
+    const { questions, skipped } = calibrate(rows, truth);
+    expect(questions[0]?.n).toBe(2);
+    expect(questions[0]?.accuracy).toBe(1);
+    expect(questions[0]?.brier).toBeCloseTo(0.01);
+    expect(skipped).toEqual({});
   });
 
-  test('skips a Choice truth that is not one of the options', () => {
-    const rows = [row('a', { kind: kind('bug', 0.8) })];
-    expect(calibrate(rows, new Map([['a', { kind: 'chore' }]]))).toEqual([]);
+  test('counts truth values it cannot score instead of dropping them', () => {
+    const rows = [row('a', { kind: kind('bug', 0.8), flag: { type: 'noul', noul: 0.9 } })];
+    const truth = new Map<string, Truth>([['a', { kind: 'chore', flag: 'yes', missing: true }]]);
+    const result = calibrate(rows, truth);
+    expect(result.questions).toEqual([]);
+    expect(result.skipped).toEqual({ kind: 1, flag: 1, missing: 1 });
+    expect(renderCalibration(result)).toContain('  kind: 1');
   });
 });
 
