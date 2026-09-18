@@ -79,6 +79,26 @@ describe('JevClient', () => {
     expect(result.attempts).toBe(2);
   });
 
+  test('retries a 504', async () => {
+    const { fetchImpl, calls } = fakeFetch([
+      { status: 504, body: 'gateway timeout', headers: { 'retry-after': '0' } },
+      { status: 200, body: okBody },
+    ]);
+    const client = new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl });
+    expect((await client.ask('x', questions)).attempts).toBe(2);
+    expect(calls).toHaveLength(2);
+  });
+
+  test('reports a 2xx error envelope by its shape, not as a schema dump', async () => {
+    const { fetchImpl } = fakeFetch([
+      { status: 200, body: { error: { message: 'provider returned error' } } },
+    ]);
+    const client = new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl });
+    const error = await client.ask('x', questions).catch((e: unknown) => e);
+    expect((error as Error).message).toMatch(/wrong shape at model, answers, usage/);
+    expect((error as Error).message).toContain('provider returned error');
+  });
+
   test('does not retry a 422', async () => {
     const { fetchImpl, calls } = fakeFetch([{ status: 422, body: { error: 'bad question' } }]);
     const client = new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl });
@@ -135,6 +155,9 @@ describe('stringifyEntries', () => {
 describe('retryDelayMs', () => {
   test('prefers retry-after seconds', () => {
     expect(retryDelayMs('2', 1)).toBe(2000);
+  });
+  test('caps a long retry-after at a minute', () => {
+    expect(retryDelayMs('3600', 1)).toBe(60_000);
   });
   test('falls back to exponential backoff', () => {
     const d = retryDelayMs(null, 3);

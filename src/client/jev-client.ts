@@ -64,7 +64,10 @@ const responseSchema = z.object({
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number() }),
 });
 
-const RETRYABLE = new Set([429, 500, 502, 503, 524, 529]);
+const RETRYABLE = new Set([408, 429, 500, 502, 503, 504, 524, 529]);
+
+/** A `retry-after` longer than this is slept for this long instead. */
+const MAX_RETRY_DELAY_MS = 60_000;
 
 /** A non-2xx answer from the provider, after retries. */
 export class JevHttpError extends Error {
@@ -138,7 +141,7 @@ export class JevClient {
         continue;
       }
       if (res.ok) {
-        const parsed = responseSchema.parse(await res.json());
+        const parsed = parseResponse(await res.text());
         for (const [id, question] of Object.entries(questions)) {
           const answer = parsed.answers[id];
           if (!answer) throw new Error(`response is missing answer "${id}"`);
@@ -173,10 +176,31 @@ function readProvider(): Provider {
   return raw;
 }
 
-/** `retry-after` in seconds when present, else exponential backoff with jitter (0.5s, 1s, 2s…). */
+/** A 2xx whose body is not the documented shape: an error envelope, or markup from the edge. */
+function parseResponse(text: string): z.infer<typeof responseSchema> {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`response is not JSON: ${text.slice(0, 200)}`);
+  }
+  const parsed = responseSchema.safeParse(json);
+  if (!parsed.success) {
+    const where = parsed.error.issues.map((issue) => issue.path.join('.') || '(root)').join(', ');
+    throw new Error(`response has the wrong shape at ${where}: ${text.slice(0, 200)}`);
+  }
+  return parsed.data;
+}
+
+/**
+ * `retry-after` in seconds when present, capped at a minute, else exponential
+ * backoff with jitter (0.5s, 1s, 2s…).
+ */
 export function retryDelayMs(retryAfter: string | null, attempt: number): number {
   const fromHeader = retryAfter === null ? Number.NaN : Number(retryAfter) * 1000;
-  if (Number.isFinite(fromHeader) && fromHeader >= 0) return fromHeader;
+  if (Number.isFinite(fromHeader) && fromHeader >= 0) {
+    return Math.min(fromHeader, MAX_RETRY_DELAY_MS);
+  }
   return 500 * 2 ** (attempt - 1) + Math.random() * 250;
 }
 
