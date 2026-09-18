@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
 
 </div>
 
@@ -20,9 +20,13 @@
 | `bun run jev run <experiment> --input <path>` | Run an experiment over every record; write JSONL rows and a report to `results/` |
 | `bun run jev ask --state "..." --noul "..."` | One-off question(s) against a string or `@file`, no experiment file needed |
 | `bun run jev list` | List experiments under `experiments/` |
+| `bun run jev calibrate --rows <rows.jsonl> --truth <truth.jsonl>` | Reliability tables, accuracy, Brier score, and calibration error for each Choice and Noul against known answers |
+| `bun run jev stability <rows.jsonl> <rows.jsonl>...` | Largest run-to-run difference per question across repeated runs of the same records |
 | `--dry-run` (on `run` or `ask`) | Print the first request payload and exit without calling Jev |
 
 `run` flags: `--input <path\|->` (JSONL, JSON array, text file, directory, or stdin) · `--out results/` · `--limit N` · `--concurrency 8` · `--model M` · `--provider openrouter\|typesafe` · `--keep-input` · `--keep-state`.
+
+`calibrate` truth lines are `{"id": "...", "truth": {"<question>": "<option>" | true | false}}`; `--bins N` sets the bin count (default 10).
 
 `ask` question flags: `--noul "id=question"` · `--choice "id=question|optA,optB"` · `--score "id=question|level0,level1,level2"`. The `id=` prefix is optional.
 
@@ -85,9 +89,10 @@ Each `run` writes `results/<experiment>-<timestamp>.jsonl` (one row per record: 
 | `src/experiments/` | `defineExperiment`, experiment loader |
 | `src/input/` | Input path → records (JSONL, JSON, text, directory, stdin) |
 | `src/run/` | Concurrency-bounded runner, report renderer |
+| `src/analysis/` | Calibration against known answers, run-to-run stability; neither calls Jev |
 | `experiments/` | One file per experiment |
 | `samples/` | Small inputs for the shipped experiments |
-| `docs/` | `jev-prompting.md` (how to write questions), `decisions.md`, `llm-comparison.md` (planned), `ideas/` (unbuilt experiment write-ups) |
+| `docs/` | `jev-prompting.md` (how to write questions), `decisions.md`, `findings.md` (measured behavior), `llm-comparison.md` (planned), `ideas/` (unbuilt experiment write-ups) |
 
 ## Development guide
 

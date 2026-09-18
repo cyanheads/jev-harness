@@ -1,6 +1,6 @@
 {
   "name": "jev-harness",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Harness for TypeSafe's Jev decision model: typed questions over datasets via OpenRouter, JSONL answers, summary reports.",
@@ -29,6 +29,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./analysis": "./src/analysis/index.ts",
     "./client": "./src/client/index.ts",
     "./questions": "./src/questions/index.ts",
     "./experiments": "./src/experiments/index.ts",

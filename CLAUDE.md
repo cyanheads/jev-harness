@@ -16,6 +16,8 @@ Bun ≥1.3, TypeScript strict (`noUncheckedIndexedAccess`, `verbatimModuleSyntax
 | Run | `bun run jev run <exp> --input <path>` | Needs `OPENROUTER_API_KEY` in `.env`; exit code 2 if any record failed |
 | One-off | `bun run jev ask --state "..." --noul "..." --choice "id=q\|a,b"` | Ad-hoc questions, JSON result to stdout |
 | List | `bun run jev list` | Experiments under `experiments/` |
+| Calibrate | `bun run jev calibrate --rows <rows> --truth <truth>` | Offline; truth lines are `{id, truth: {question: option \| boolean}}` |
+| Stability | `bun run jev stability <rows> <rows>...` | Offline; same records sent more than once |
 
 Results land in `results/` (gitignored). The row's `model` field is the versioned ID that answered — log it when comparing runs.
 
@@ -25,7 +27,7 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 
 | Path | Role |
 |:---|:---|
-| `bin/jev.ts` | CLI (`node:util` `parseArgs`); `run` / `ask` / `list` |
+| `bin/jev.ts` | CLI (`node:util` `parseArgs`); `run` / `ask` / `list` / `calibrate` / `stability` |
 | `src/client/jev-client.ts` | Both providers, retry on 429/5xx honoring `retry-after`, Zod response validation, cost from input tokens |
 | `src/questions/questions.ts` | `choice` / `score` / `noul` builders; `AnswersFor<Qs>` infers answer types from the question map |
 | `src/experiments/experiment.ts` | `defineExperiment`; `state`/`derive` are method signatures so typed experiments assign to the runner's `Experiment` |
@@ -33,6 +35,7 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 | `src/input/records.ts` | JSONL / JSON / text / directory / stdin → `{ id, data }` |
 | `src/run/runner.ts` | Worker-pool runner; rows stream via `onRow` |
 | `src/run/report.ts` | Text report |
+| `src/analysis/` | `calibrate` (reliability bins, accuracy, Brier, ECE) and `stability` (largest pairwise difference per question) over rows on disk |
 
 ## The rules that matter
 
@@ -48,6 +51,7 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 ## Where things live
 
 - `docs/decisions.md` — append-only decisions with rationale; add an entry when you change a default.
+- `docs/findings.md` — what measurement has shown about Jev (stability, calibration by answer type, which signals held up). Read it before choosing a threshold; update the matching section when a new run supersedes it.
 - `docs/jev-prompting.md` — question-writing rules; re-check the live jaggedness page when a new Jev version ships.
 - `docs/llm-comparison.md` — the planned `--via <model>` comparison mode, not built.
 - `docs/ideas/` — write-ups of experiments worth running later, one file each with status, design, evaluation plan, and kill criteria: `literal-client-probe.md` (Jev as a weak-client reader of MCP tool descriptions), `tool-ranker.md` (Jev as a reranker for tool search). Add a file here when an idea is worth keeping; re-read its open questions before building from one.

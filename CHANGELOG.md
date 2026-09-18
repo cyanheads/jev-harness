@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.2.0](changelog/0.2.x/0.2.0.md) — 2026-09-17
+
+Offline analysis commands: `jev calibrate` checks probabilities against known answers, `jev stability` compares repeated runs. First measured findings recorded.
+
 ## [0.1.1](changelog/0.1.x/0.1.1.md) — 2026-09-17
 
 Linkable package exports; Noul criteria require both sides (OpenRouter rejects one-sided criteria).

@@ -8,26 +8,40 @@
  *   bun run jev ask --state <text|@file> [--noul "id=question"]...
  *                   [--choice "id=question|optA,optB"]... [--score "id=question|l0,l1,l2"]...
  *   bun run jev list
+ *   bun run jev calibrate --rows <rows.jsonl> --truth <truth.jsonl> [--bins 10]
+ *   bun run jev stability <rows.jsonl> <rows.jsonl>...
  *
  * `run` writes one JSONL row per record plus a `.report.txt` to --out and prints
  * the report. `ask` is for one-off pokes without writing an experiment file.
  * `--dry-run` prints the first request payload and exits without calling Jev.
+ * `calibrate` checks a run's probabilities against known answers (truth lines are
+ * `{"id": "...", "truth": {"<question>": "<option>" | true | false}}`); `stability`
+ * compares repeated runs over the same records. Neither calls Jev.
  */
 
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import {
+  calibrate,
+  renderCalibration,
+  renderStability,
+  stability,
+  type Truth,
+} from '../src/analysis/index.ts';
 import { JevClient, type Provider, type State } from '../src/client/index.ts';
 import { listExperiments, loadExperiment } from '../src/experiments/index.ts';
 import { loadRecords } from '../src/input/index.ts';
 import { choice, noul, type Questions, score } from '../src/questions/index.ts';
-import { renderReport, runExperiment } from '../src/run/index.ts';
+import { type RunRow, renderReport, runExperiment } from '../src/run/index.ts';
 
 const USAGE = `usage:
   jev run <experiment> --input <path|-> [--out results/] [--limit N] [--concurrency 8]
           [--model M] [--provider openrouter|typesafe] [--keep-input] [--keep-state] [--dry-run]
   jev ask --state <text|@file> [--noul "id=q"]... [--choice "id=q|a,b"]... [--score "id=q|l0,l1"]...
-  jev list`;
+  jev list
+  jev calibrate --rows <rows.jsonl> --truth <truth.jsonl> [--bins 10]
+  jev stability <rows.jsonl> <rows.jsonl>...`;
 
 const { values, positionals } = parseArgs({
   args: Bun.argv.slice(2),
@@ -46,6 +60,9 @@ const { values, positionals } = parseArgs({
     noul: { type: 'string', multiple: true, default: [] },
     choice: { type: 'string', multiple: true, default: [] },
     score: { type: 'string', multiple: true, default: [] },
+    rows: { type: 'string' },
+    truth: { type: 'string' },
+    bins: { type: 'string', default: '10' },
     help: { type: 'boolean', short: 'h', default: false },
   },
 });
@@ -54,6 +71,14 @@ const [command, ...rest] = positionals;
 if (values.help || !command) {
   console.log(USAGE);
   process.exit(values.help ? 0 : 1);
+}
+
+async function readJsonl<T>(path: string): Promise<T[]> {
+  const text = await Bun.file(path).text();
+  return text
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => JSON.parse(line) as T);
 }
 
 function makeClient(): JevClient {
@@ -152,6 +177,29 @@ switch (command) {
     }
     const result = await makeClient().ask(state, questions);
     console.log(JSON.stringify(result, null, 2));
+    break;
+  }
+
+  case 'calibrate': {
+    if (!values.rows || !values.truth) {
+      console.error(USAGE);
+      process.exit(1);
+    }
+    const rows = await readJsonl<RunRow>(values.rows);
+    const truth = new Map(
+      (await readJsonl<{ id: string; truth: Truth }>(values.truth)).map((t) => [t.id, t.truth]),
+    );
+    console.log(renderCalibration(calibrate(rows, truth, Number(values.bins))));
+    break;
+  }
+
+  case 'stability': {
+    if (rest.length < 2) {
+      console.error(USAGE);
+      process.exit(1);
+    }
+    const runs = await Promise.all(rest.map((path) => readJsonl<RunRow>(path)));
+    console.log(renderStability(stability(runs), runs.length));
     break;
   }
 
