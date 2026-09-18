@@ -1,0 +1,3 @@
+[install]
+# Supply-chain hold: a package version must be at least 3 days old before it installs.
+minimumReleaseAge = 259200

@@ -1,0 +1,200 @@
+/**
+ * src/client/jev-client.ts
+ *
+ * HTTP client for Jev. One request shape (`{ model, state, questions }`) served
+ * by two providers: OpenRouter's `/api/alpha/decisions` and TypeSafe's own
+ * `/v1/systemone`. Retries 429/5xx with backoff, honors `retry-after`, validates
+ * the response with Zod, and reports token usage, cost, and latency per call.
+ */
+
+import { z } from 'zod';
+import {
+  type AnswersFor,
+  answerSchema,
+  assertAnswerMatches,
+  type Entry,
+  type Question,
+  type Questions,
+} from '../questions/index.ts';
+
+export type Provider = 'openrouter' | 'typesafe';
+
+export const PROVIDERS: Readonly<
+  Record<Provider, { url: string; defaultModel: string; keyEnv: string }>
+> = {
+  openrouter: {
+    url: 'https://openrouter.ai/api/alpha/decisions',
+    defaultModel: 'typesafe/jev-1.13',
+    keyEnv: 'OPENROUTER_API_KEY',
+  },
+  typesafe: {
+    url: 'https://api.typesafe.ai/v1/systemone',
+    defaultModel: 'jev-1.13.0',
+    keyEnv: 'TYPESAFE_API_KEY',
+  },
+};
+
+/** Listed input price on both providers; output tokens are free. */
+export const USD_PER_INPUT_TOKEN = 0.042 / 1_000_000;
+
+export type State = string | readonly State[] | { readonly [key: string]: State };
+
+export interface JevClientOptions {
+  readonly provider?: Provider;
+  readonly apiKey?: string;
+  readonly model?: string;
+  readonly fetch?: typeof fetch;
+  readonly maxAttempts?: number;
+  readonly timeoutMs?: number;
+}
+
+export interface JevResult<Qs extends Questions> {
+  readonly model: string;
+  readonly answers: AnswersFor<Qs>;
+  readonly usage: { readonly inputTokens: number; readonly outputTokens: number };
+  readonly costUsd: number;
+  readonly latencyMs: number;
+  readonly attempts: number;
+}
+
+const responseSchema = z.object({
+  model: z.string(),
+  answers: z.record(z.string(), answerSchema),
+  usage: z.object({ input_tokens: z.number(), output_tokens: z.number() }),
+});
+
+const RETRYABLE = new Set([429, 500, 502, 503, 524, 529]);
+
+export class JevClient {
+  readonly provider: Provider;
+  readonly model: string;
+  readonly url: string;
+  readonly #apiKey: string;
+  readonly #fetch: typeof fetch;
+  readonly #maxAttempts: number;
+  readonly #timeoutMs: number;
+
+  constructor(options: JevClientOptions = {}) {
+    this.provider = options.provider ?? readProvider();
+    const spec = PROVIDERS[this.provider];
+    this.url = spec.url;
+    this.model = options.model ?? process.env.JEV_MODEL ?? spec.defaultModel;
+    const key = options.apiKey ?? process.env[spec.keyEnv];
+    if (!key) {
+      throw new Error(
+        `${spec.keyEnv} is not set (provider ${this.provider}); copy .env.example to .env`,
+      );
+    }
+    this.#apiKey = key;
+    this.#fetch = options.fetch ?? fetch;
+    this.#maxAttempts = options.maxAttempts ?? 4;
+    this.#timeoutMs = options.timeoutMs ?? 15_000;
+  }
+
+  /** The exact JSON body that would be sent — for `--dry-run` and tests. */
+  payload(state: State, questions: Questions): Record<string, unknown> {
+    return {
+      model: this.model,
+      state,
+      questions: this.provider === 'openrouter' ? stringifyEntries(questions) : questions,
+    };
+  }
+
+  async ask<const Qs extends Questions>(state: State, questions: Qs): Promise<JevResult<Qs>> {
+    const body = JSON.stringify(this.payload(state, questions));
+    const started = performance.now();
+    let attempt = 0;
+    for (;;) {
+      attempt += 1;
+      const res = await this.#fetch(this.url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.#apiKey}`, 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(this.#timeoutMs),
+      });
+      if (res.ok) {
+        const parsed = responseSchema.parse(await res.json());
+        for (const [id, question] of Object.entries(questions)) {
+          const answer = parsed.answers[id];
+          if (!answer) throw new Error(`response is missing answer "${id}"`);
+          assertAnswerMatches(id, question, answer);
+        }
+        return {
+          model: parsed.model,
+          answers: parsed.answers as unknown as AnswersFor<Qs>,
+          usage: {
+            inputTokens: parsed.usage.input_tokens,
+            outputTokens: parsed.usage.output_tokens,
+          },
+          costUsd: parsed.usage.input_tokens * USD_PER_INPUT_TOKEN,
+          latencyMs: Math.round(performance.now() - started),
+          attempts: attempt,
+        };
+      }
+      const text = await res.text();
+      if (!RETRYABLE.has(res.status) || attempt >= this.#maxAttempts) {
+        throw new Error(
+          `Jev ${this.provider} ${res.status} after ${attempt} attempt(s): ${text.slice(0, 500)}`,
+        );
+      }
+      await Bun.sleep(retryDelayMs(res.headers.get('retry-after'), attempt));
+    }
+  }
+}
+
+function readProvider(): Provider {
+  const raw = process.env.JEV_PROVIDER ?? 'openrouter';
+  if (raw !== 'openrouter' && raw !== 'typesafe') {
+    throw new Error(`JEV_PROVIDER must be openrouter or typesafe, got "${raw}"`);
+  }
+  return raw;
+}
+
+/** `retry-after` in seconds when present, else exponential backoff with jitter (0.5s, 1s, 2s…). */
+export function retryDelayMs(retryAfter: string | null, attempt: number): number {
+  const fromHeader = retryAfter === null ? Number.NaN : Number(retryAfter) * 1000;
+  if (Number.isFinite(fromHeader) && fromHeader >= 0) return fromHeader;
+  return 500 * 2 ** (attempt - 1) + Math.random() * 250;
+}
+
+/**
+ * OpenRouter validates `instructions` and criteria values as strings, so
+ * structured entries are JSON-encoded on the wire. TypeSafe accepts them as-is.
+ */
+export function stringifyEntries(questions: Questions): Record<string, Question> {
+  const asString = (entry: Entry | undefined): string | undefined =>
+    entry === undefined || typeof entry === 'string' ? entry : JSON.stringify(entry);
+  const out: Record<string, Question> = {};
+  for (const [id, q] of Object.entries(questions)) {
+    const instructions = asString(q.instructions) ?? '';
+    switch (q.type) {
+      case 'choice':
+        out[id] = {
+          type: 'choice',
+          instructions,
+          criteria: Object.fromEntries(
+            Object.entries(q.criteria).map(([k, v]) => [k, v === null ? null : asString(v)]),
+          ) as Record<string, Entry>,
+        };
+        break;
+      case 'score':
+        out[id] = {
+          type: 'score',
+          instructions,
+          criteria: q.criteria.map((c) => asString(c) ?? ''),
+        };
+        break;
+      case 'noul': {
+        const criteria = q.criteria && {
+          ...(q.criteria.true !== undefined && { true: asString(q.criteria.true) }),
+          ...(q.criteria.false !== undefined && { false: asString(q.criteria.false) }),
+        };
+        out[id] = criteria
+          ? { type: 'noul', instructions, criteria }
+          : { type: 'noul', instructions };
+        break;
+      }
+    }
+  }
+  return out;
+}

@@ -1,0 +1,5 @@
+{"id":"t1","subject":"Duplicate charge","body":"I was charged twice for order A-104. Please refund the duplicate."}
+{"id":"t2","subject":"API returns 500","body":"Since this morning every call to /v2/export returns a 500. Our nightly job is failing. Request id abc123."}
+{"id":"t3","subject":"Team plan pricing","body":"Hi! We're a team of 12 — is there a discount if we move from Pro to the Team plan annually?"}
+{"id":"t4","subject":"THIS IS UNACCEPTABLE","body":"Third time I'm writing. Still locked out of my account and nobody answers. Fix it or I'm gone."}
+{"id":"t5","subject":"Feature idea","body":"Would love a dark mode for the dashboard. Not urgent, just a thought."}
