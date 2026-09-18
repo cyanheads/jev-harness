@@ -43,6 +43,7 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 - **Keep the harness thin.** New capability goes in an experiment first; it moves into `src/` only when a second experiment needs it.
 - **Rows are the record of a run.** Don't add fields that bloat rows by default — `--keep-input` / `--keep-state` exist for that.
 - `.env` is gitignored and holds the only secrets. Never write a key with a file tool; open `.env` in an editor for Casey to paste.
+- **A shell-exported `OPENROUTER_API_KEY` wins over `.env`** (Bun does not override variables already in the environment). A stale export in `~/.config/zsh/secrets.zsh` shows up as `401 {"error":{"message":"User not found."}}` on every record even though `.env` is right. Diagnose with `bun -e 'console.log(process.env.OPENROUTER_API_KEY?.slice(-5))'` against the tail of the `.env` value; bypass with `env -u OPENROUTER_API_KEY bun run jev …`; fix by updating the export.
 
 ## Where things live
 

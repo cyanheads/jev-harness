@@ -69,6 +69,8 @@ bun run jev run ticket-routing --input samples/tickets.jsonl
 | `TYPESAFE_API_KEY` | with `typesafe` | — | TypeSafe key (early access) |
 | `JEV_MODEL` | no | `typesafe/jev-1.13` / `jev-1.13.0` | Model ID. Pinned by default; aliases like `jev-latest` move when a release ships |
 
+A variable already exported in the shell takes precedence over `.env`. If every record fails with `401 User not found` while `.env` holds a valid key, a stale export is shadowing it: `env -u OPENROUTER_API_KEY bun run jev …` bypasses it.
+
 ## Output
 
 Each `run` writes `results/<experiment>-<timestamp>.jsonl` (one row per record: `id`, `answers`, `derived`, `model`, `usage`, `costUsd`, `latencyMs`, `attempts`) and a `.report.txt` with per-question distributions, confidence, latency percentiles, token count and cost, and tallies of `derived` fields. Rows stream to disk as they complete.
