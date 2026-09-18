@@ -13,7 +13,7 @@ Bun ≥1.3, TypeScript strict (`noUncheckedIndexedAccess`, `verbatimModuleSyntax
 | Mode | Command | Notes |
 |:---|:---|:---|
 | Payload preview | `bun run jev run <exp> --input <path> --dry-run` | No key needed; prints the first request |
-| Run | `bun run jev run <exp> --input <path>` | Needs `OPENROUTER_API_KEY` in `.env`; exit code 2 if any record failed |
+| Run | `bun run jev run <exp> --input <path>` | Needs `OPENROUTER_API_KEY` in `.env`; exit code 2 if any record failed, 1 if the key was rejected |
 | One-off | `bun run jev ask --state "..." --noul "..." --choice "id=q\|a,b"` | Ad-hoc questions, JSON result to stdout |
 | List | `bun run jev list` | Experiments under `experiments/` |
 | Calibrate | `bun run jev calibrate --rows <rows> --truth <truth>` | Offline; truth lines are `{id, truth: {question: option \| boolean}}` |
@@ -28,12 +28,12 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 | Path | Role |
 |:---|:---|
 | `bin/jev.ts` | CLI (`node:util` `parseArgs`); `run` / `ask` / `list` / `calibrate` / `stability` |
-| `src/client/jev-client.ts` | Both providers, retry on 429/5xx honoring `retry-after`, Zod response validation, cost from input tokens |
+| `src/client/jev-client.ts` | Both providers, retry on 429/5xx/timeouts honoring `retry-after`, `JevHttpError` for a non-2xx answer, Zod response validation, cost from input tokens |
 | `src/questions/questions.ts` | `choice` / `score` / `noul` builders; `AnswersFor<Qs>` infers answer types from the question map |
 | `src/experiments/experiment.ts` | `defineExperiment`; `state`/`derive` are method signatures so typed experiments assign to the runner's `Experiment` |
 | `src/experiments/load-experiment.ts` | Resolves a path or bare name under `experiments/` |
 | `src/input/records.ts` | JSONL / JSON / text / directory / stdin → `{ id, data }` |
-| `src/run/runner.ts` | Worker-pool runner; rows stream via `onRow` |
+| `src/run/runner.ts` | Worker-pool runner; rows stream via `onRow`; throws at the first 401/403 instead of failing every record |
 | `src/run/report.ts` | Text report |
 | `src/analysis/` | `calibrate` (reliability bins, accuracy, Brier, ECE) and `stability` (largest pairwise difference per question) over rows on disk |
 
@@ -44,9 +44,10 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 - **Never send the label in the state** when an experiment measures agreement with a carried label (`mcp-error-triage` keeps `errorClass` out of `state` and compares in `derive`).
 - **Pinned model by default.** `typesafe/jev-1.13` / `jev-1.13.0`. Don't switch the default to `jev-latest`; thresholds tuned on one version don't carry.
 - **Keep the harness thin.** New capability goes in an experiment first; it moves into `src/` only when a second experiment needs it.
+- **`mcp-error-triage` has a downstream consumer.** RemoteSysAdmin's `scripts/triage-mcp-errors.ts` spawns `jev run mcp-error-triage` and reads `answers.origin`, `answers.message_clarity`, `derived.origin_disagrees`, and `derived.opaque_message` from the rows, joined on the record `id`. Renaming any of those, or the experiment, breaks it; change both repos together.
 - **Rows are the record of a run.** Don't add fields that bloat rows by default — `--keep-input` / `--keep-state` exist for that.
 - `.env` is gitignored and holds the only secrets. Never write a key with a file tool; open `.env` in an editor for Casey to paste.
-- **A shell-exported `OPENROUTER_API_KEY` wins over `.env`** (Bun does not override variables already in the environment). A stale export in `~/.config/zsh/secrets.zsh` shows up as `401 {"error":{"message":"User not found."}}` on every record even though `.env` is right. Diagnose with `bun -e 'console.log(process.env.OPENROUTER_API_KEY?.slice(-5))'` against the tail of the `.env` value; bypass with `env -u OPENROUTER_API_KEY bun run jev …`; fix by updating the export.
+- **A shell-exported `OPENROUTER_API_KEY` wins over `.env`** (Bun does not override variables already in the environment). A stale export in `~/.config/zsh/secrets.zsh` stops the run at the first record with `401 {"error":{"message":"User not found."}}` even though `.env` is right. Diagnose with `bun -e 'console.log(process.env.OPENROUTER_API_KEY?.slice(-5))'` against the tail of the `.env` value; bypass with `env -u OPENROUTER_API_KEY bun run jev …`; fix by updating the export.
 
 ## Where things live
 

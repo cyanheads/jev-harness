@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.3.0](changelog/0.3.x/0.3.0.md) — 2026-09-17 · ⚠️ Breaking
+
+`mcp-error-triage` reworked into a two-question second reader; runs stop at the first rejected key and retry timeouts.
+
 ## [0.2.0](changelog/0.2.x/0.2.0.md) — 2026-09-17
 
 Offline analysis commands: `jev calibrate` checks probabilities against known answers, `jev stability` compares repeated runs. First measured findings recorded.

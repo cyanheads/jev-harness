@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
 
 </div>
 
@@ -53,7 +53,7 @@ export default defineExperiment({
 
 `questions` are asked together over each record's `state`. `derive` is optional code-side policy (thresholds, agreement with a label on the record); its fields land in each row and are tallied in the report. Answer types follow the questions: `answers.team.choice` is typed to the declared option keys.
 
-Two experiments ship: `ticket-routing` (the smallest possible one; copy it) and `mcp-error-triage` (classifies hosted MCP server errors by origin, severity, and error-message clarity). Sample inputs for both are in `samples/`.
+Two experiments ship: `ticket-routing` (the smallest possible one; copy it) and `mcp-error-triage` (a second reader for hosted MCP server errors: origin against a rule-based label, and clarity of the text the caller was shown). Sample inputs for both are in `samples/`.
 
 ## Getting started
 
@@ -73,7 +73,7 @@ bun run jev run ticket-routing --input samples/tickets.jsonl
 | `TYPESAFE_API_KEY` | with `typesafe` | — | TypeSafe key (early access) |
 | `JEV_MODEL` | no | `typesafe/jev-1.13` / `jev-1.13.0` | Model ID. Pinned by default; aliases like `jev-latest` move when a release ships |
 
-A variable already exported in the shell takes precedence over `.env`. If every record fails with `401 User not found` while `.env` holds a valid key, a stale export is shadowing it: `env -u OPENROUTER_API_KEY bun run jev …` bypasses it.
+A run stops at the first 401 or 403 and exits 1. A variable already exported in the shell takes precedence over `.env`, so if a run stops with `401 User not found` while `.env` holds a valid key, a stale export is shadowing it: `env -u OPENROUTER_API_KEY bun run jev …` bypasses it.
 
 ## Output
 
@@ -84,7 +84,7 @@ Each `run` writes `results/<experiment>-<timestamp>.jsonl` (one row per record: 
 | Path | Purpose |
 |:---|:---|
 | `bin/jev.ts` | The CLI |
-| `src/client/` | HTTP client for both providers: retries, response validation, cost and latency per call |
+| `src/client/` | HTTP client for both providers: retries (429, 5xx, timeouts), response validation, cost and latency per call |
 | `src/questions/` | `choice` / `score` / `noul` builders, wire schemas, answer-type inference |
 | `src/experiments/` | `defineExperiment`, experiment loader |
 | `src/input/` | Input path → records (JSONL, JSON, text, directory, stdin) |
