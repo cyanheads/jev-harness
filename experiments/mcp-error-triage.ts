@@ -3,13 +3,14 @@
  *
  * Second reader for errors from hosted MCP servers. Input records carry the
  * shape RemoteSysAdmin's `collect-mcp-errors.ts --json` emits (`container`,
- * `scope`, `message`, `toolMessage`, `errorCode`, `statusCode`, `count`, `kind`,
- * and the script's rule-based `errorClass`), or the same shape collapsed across
- * tools by `triage-mcp-errors.ts`, which adds `tools`.
+ * `scope`, `message`, `toolMessage`, `recoveryHint`, `errorCode`, `statusCode`,
+ * `count`, `kind`, and the script's rule-based `errorClass`), or the same shape
+ * collapsed across tools by `triage-mcp-errors.ts`, which adds `tools`.
  *
  * Two questions, the two that held up on real data (docs/findings.md): whether
- * Jev's origin call agrees with the rule-based one, and whether the text the
- * caller was shown says what went wrong. `errorClass` stays out of the state so
+ * Jev's origin call agrees with the rule-based one, and whether what the caller
+ * was shown — the tool's message and the recovery hint the framework appends to
+ * it — says what went wrong. `errorClass` stays out of the state so
  * Jev judges the error, not the label. How often an error happened is not asked
  * about and not sent: a count sorts itself, and a severity question that saw it
  * only restated it.
@@ -30,6 +31,8 @@ interface McpError {
   readonly message: string;
   /** What the caller was shown, when that differs from `message`. */
   readonly toolMessage?: string;
+  /** The recovery hint the framework appended to what the caller was shown. */
+  readonly recoveryHint?: string;
   readonly errorClass: 'INPUT' | 'UPSTREAM' | 'CAPACITY' | 'SERVER';
   readonly errorCode: string;
   readonly statusCode?: number;
@@ -38,6 +41,12 @@ interface McpError {
 
 /** Below this, a disagreement with the rules was usually Jev's mistake, not theirs. */
 const DISAGREE_MIN_CONFIDENCE = 0.6;
+/**
+ * Jev calling `server` against the rules has been a caller's SQL error read as a
+ * database fault every time it was checked (0.60–0.74); its `upstream` and `input`
+ * disagreements are where the real finds were, so only this one is held higher.
+ */
+const SERVER_CALL_MIN_CONFIDENCE = 0.75;
 /** A weighted clarity score below this lands on "Opaque". */
 const OPAQUE_BELOW = 0.5;
 /** Long SQL and HTML bodies carry their signal in the first few hundred characters. */
@@ -75,8 +84,9 @@ export default defineExperiment({
     message_clarity: score(
       {
         question:
-          'How well does `error.shown_to_caller` tell the caller what went wrong and how to fix the call?',
-        focus: 'Judge `error.shown_to_caller` only. `error.upstream_detail` was never shown.',
+          'How well do `error.shown_to_caller` and `error.recovery_shown_to_caller` together tell the caller what went wrong and how to fix the call?',
+        focus:
+          'The caller saw `error.shown_to_caller` followed by `error.recovery_shown_to_caller` when it is present. `error.upstream_detail` was never shown.',
       },
       [
         'Opaque: a generic or internal message, a bare status code, or markup, with no usable detail.',
@@ -93,6 +103,9 @@ export default defineExperiment({
       errorCode: record.errorCode,
       ...(record.statusCode !== undefined && { statusCode: String(record.statusCode) }),
       shown_to_caller: (record.toolMessage ?? record.message).slice(0, MAX_TEXT),
+      ...(record.recoveryHint !== undefined && {
+        recovery_shown_to_caller: record.recoveryHint.slice(0, MAX_TEXT),
+      }),
       ...(record.toolMessage !== undefined && {
         upstream_detail: record.message.slice(0, MAX_TEXT),
       }),
@@ -105,7 +118,9 @@ export default defineExperiment({
       heuristic,
       /** A disagreement is a review queue: either side can be the one that is wrong. */
       origin_disagrees:
-        origin !== heuristic && origin !== 'unclear' && confidence >= DISAGREE_MIN_CONFIDENCE,
+        origin !== heuristic &&
+        origin !== 'unclear' &&
+        confidence >= (origin === 'server' ? SERVER_CALL_MIN_CONFIDENCE : DISAGREE_MIN_CONFIDENCE),
       opaque_message: answers.message_clarity.score < OPAQUE_BELOW,
     };
   },

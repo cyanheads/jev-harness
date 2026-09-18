@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
 
 </div>
 
@@ -53,7 +53,7 @@ export default defineExperiment({
 
 `questions` are asked together over each record's `state`. `derive` is optional code-side policy (thresholds, agreement with a label on the record); its fields land in each row and are tallied in the report. Answer types follow the questions: `answers.team.choice` is typed to the declared option keys.
 
-Two experiments ship: `ticket-routing` (the smallest possible one; copy it) and `mcp-error-triage` (a second reader for hosted MCP server errors: origin against a rule-based label, and clarity of the text the caller was shown). Sample inputs for both are in `samples/`.
+Two experiments ship: `ticket-routing` (the smallest possible one; copy it) and `mcp-error-triage` (a second reader for hosted MCP server errors: origin against a rule-based label, and clarity of what the caller was shown, message and recovery hint together). Sample inputs for both are in `samples/`.
 
 ## Getting started
 
