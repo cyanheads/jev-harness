@@ -7,7 +7,7 @@
  */
 
 import type { Experiment } from '../experiments/index.ts';
-import type { RunOutcome, RunRow } from './runner.ts';
+import type { RunOutcome } from './runner.ts';
 
 export function renderReport(experiment: Experiment, outcome: RunOutcome): string {
   const { rows, failures } = outcome;
@@ -92,13 +92,6 @@ export function renderReport(experiment: Experiment, outcome: RunOutcome): strin
     if (failures.length > 10) lines.push(`  … and ${failures.length - 10} more`);
   }
   return lines.join('\n');
-}
-
-export function summarizeRows(rows: readonly RunRow[]): { tokens: number; costUsd: number } {
-  return {
-    tokens: rows.reduce((s, r) => s + r.usage.inputTokens, 0),
-    costUsd: rows.reduce((s, r) => s + r.costUsd, 0),
-  };
 }
 
 function tally(values: readonly string[]): Record<string, number> {
