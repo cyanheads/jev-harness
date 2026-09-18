@@ -33,7 +33,8 @@ export interface ScoreQuestion {
 export interface NoulQuestion {
   readonly type: 'noul';
   readonly instructions: Entry;
-  readonly criteria?: { readonly true?: Entry; readonly false?: Entry };
+  /** Both sides or neither — OpenRouter rejects a criteria object with one side missing. */
+  readonly criteria?: { readonly true: Entry; readonly false: Entry };
 }
 
 export type Question = ChoiceQuestion | ScoreQuestion | NoulQuestion;

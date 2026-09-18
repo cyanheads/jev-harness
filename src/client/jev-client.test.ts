@@ -102,13 +102,13 @@ describe('stringifyEntries', () => {
         { question: 'Which team?', focus: 'primary request' },
         { billing: { what: 'money' }, other: null },
       ),
-      ok: noul('fine?', { true: ['yes', 'affirmative'] }),
+      ok: noul('fine?', { true: ['yes', 'affirmative'], false: 'no' }),
     });
     expect(out.dept).toMatchObject({
       instructions: '{"question":"Which team?","focus":"primary request"}',
       criteria: { billing: '{"what":"money"}', other: null },
     });
-    expect(out.ok).toMatchObject({ criteria: { true: '["yes","affirmative"]' } });
+    expect(out.ok).toMatchObject({ criteria: { true: '["yes","affirmative"]', false: 'no' } });
   });
 });
 

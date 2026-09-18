@@ -184,16 +184,18 @@ export function stringifyEntries(questions: Questions): Record<string, Question>
           criteria: q.criteria.map((c) => asString(c) ?? ''),
         };
         break;
-      case 'noul': {
-        const criteria = q.criteria && {
-          ...(q.criteria.true !== undefined && { true: asString(q.criteria.true) }),
-          ...(q.criteria.false !== undefined && { false: asString(q.criteria.false) }),
-        };
-        out[id] = criteria
-          ? { type: 'noul', instructions, criteria }
+      case 'noul':
+        out[id] = q.criteria
+          ? {
+              type: 'noul',
+              instructions,
+              criteria: {
+                true: asString(q.criteria.true) ?? '',
+                false: asString(q.criteria.false) ?? '',
+              },
+            }
           : { type: 'noul', instructions };
         break;
-      }
     }
   }
   return out;

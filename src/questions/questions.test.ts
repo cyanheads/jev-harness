@@ -21,7 +21,10 @@ describe('builders', () => {
 
   test('noul omits criteria when not given', () => {
     expect(noul('Urgent?')).toEqual({ type: 'noul', instructions: 'Urgent?' });
-    expect(noul('Urgent?', { true: 'yes' }).criteria).toEqual({ true: 'yes' });
+    expect(noul('Urgent?', { true: 'yes', false: 'no' }).criteria).toEqual({
+      true: 'yes',
+      false: 'no',
+    });
   });
 });
 
