@@ -15,7 +15,7 @@
  */
 
 import { defineExperiment } from '../src/experiments/index.ts';
-import { choice, noul, score } from '../src/questions/index.ts';
+import { choice, score } from '../src/questions/index.ts';
 
 interface McpError {
   readonly container: string;
@@ -28,8 +28,14 @@ interface McpError {
   readonly count?: number;
 }
 
-const ESCALATE_MIN_SEVERITY = 2;
-const ESCALATE_MIN_CONFIDENCE = 0.6;
+/**
+ * Escalate when the probability mass on "Needs a fix" and "Outage-class" together
+ * reaches this. The top level's own confidence is a poor gate on a four-level
+ * Score: it averaged 0.55 on a real week of errors, so a 0.6 bar passed 1% of rows.
+ */
+const ESCALATE_MIN_MASS = 0.8;
+/** A weighted clarity score below this lands on "Opaque". */
+const OPAQUE_BELOW = 0.5;
 
 export default defineExperiment({
   name: 'mcp-error-triage',
@@ -72,13 +78,6 @@ export default defineExperiment({
         'Names the cause and the remedy: says what a valid call looks like.',
       ],
     ),
-    dx_gap: noul(
-      'A better tool description or input schema (examples, format constraints, how to obtain IDs) would likely have prevented this call.',
-      {
-        true: 'The mistake is one the tool could have steered the caller away from.',
-        false: 'The call was fine; the failure came from elsewhere.',
-      },
-    ),
   },
   state: (record: McpError) => ({
     server: record.container,
@@ -93,12 +92,13 @@ export default defineExperiment({
   }),
   derive: (answers, record) => {
     const heuristic = record.errorClass.toLowerCase();
+    const levels = answers.severity.probabilities;
     return {
       heuristic,
+      /** A disagreement is a review queue: either side can be the one that is wrong. */
       agrees_with_heuristic: answers.origin.choice === heuristic,
-      escalate:
-        answers.severity.score >= ESCALATE_MIN_SEVERITY &&
-        answers.severity.confidence >= ESCALATE_MIN_CONFIDENCE,
+      escalate: (levels['2'] ?? 0) + (levels['3'] ?? 0) >= ESCALATE_MIN_MASS,
+      opaque_message: answers.message_clarity.score < OPAQUE_BELOW,
     };
   },
 });
