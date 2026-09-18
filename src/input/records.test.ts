@@ -27,6 +27,13 @@ describe('loadRecords', () => {
     expect((await loadRecords(one))[0]?.id).toBe('7');
   });
 
+  test('rejects an input whose ids repeat', async () => {
+    const dir = await scratch();
+    const path = join(dir, 'dup.jsonl');
+    await writeFile(path, '{"id":"a"}\n{"id":"b"}\n{"id":"a"}\n');
+    await expect(loadRecords(path)).rejects.toThrow(/1 repeated record id\(s\): a/);
+  });
+
   test('text file: a single { text } record', async () => {
     const dir = await scratch();
     const path = join(dir, 'note.md');

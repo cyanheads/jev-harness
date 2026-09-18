@@ -7,7 +7,8 @@
  * parsed JSON), or `-` for stdin (JSONL if multi-line, else JSON).
  *
  * Every record gets an `id`: its own `id` / `requestId` when present, the file
- * name for directory inputs, else its zero-based index.
+ * name for directory inputs, else its zero-based index. Ids must be unique
+ * within one input.
  */
 
 import { readdir, readFile, stat } from 'node:fs/promises';
@@ -18,7 +19,21 @@ export interface Record_ {
   readonly data: unknown;
 }
 
+/** Rows are joined on `id` by `calibrate`, `stability`, and downstream readers, so a repeat is an error. */
 export async function loadRecords(input: string): Promise<Record_[]> {
+  const records = await readRecords(input);
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const { id } of records) (seen.has(id) ? repeated : seen).add(id);
+  if (repeated.size > 0) {
+    throw new Error(
+      `${input} has ${repeated.size} repeated record id(s): ${[...repeated].slice(0, 5).join(', ')}`,
+    );
+  }
+  return records;
+}
+
+async function readRecords(input: string): Promise<Record_[]> {
   if (input === '-') return fromText(await Bun.stdin.text(), 'stdin');
   const info = await stat(input);
   if (info.isDirectory()) {
