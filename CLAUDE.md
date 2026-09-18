@@ -27,15 +27,15 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 
 | Path | Role |
 |:---|:---|
-| `bin/jev.ts` | CLI (`node:util` `parseArgs`); `run` / `ask` / `list` / `calibrate` / `stability` |
-| `src/client/jev-client.ts` | Both providers, retry on 429/5xx/timeouts honoring `retry-after`, `JevHttpError` for a non-2xx answer, Zod response validation, cost from input tokens |
+| `bin/jev.ts` | CLI (`node:util` `parseArgs`, typed flags through a Zod schema); `run` / `ask` / `list` / `calibrate` / `stability` |
+| `src/client/jev-client.ts` | Both providers, retry on 408/429/5xx/timeouts honoring `retry-after` up to a minute, `JevHttpError` for a non-2xx answer, Zod response validation, cost from input tokens |
 | `src/questions/questions.ts` | `choice` / `score` / `noul` builders; `AnswersFor<Qs>` infers answer types from the question map |
 | `src/experiments/experiment.ts` | `defineExperiment`; `state`/`derive` are method signatures so typed experiments assign to the runner's `Experiment` |
 | `src/experiments/load-experiment.ts` | Resolves a path or bare name under `experiments/` |
-| `src/input/records.ts` | JSONL / JSON / text / directory / stdin → `{ id, data }` |
-| `src/run/runner.ts` | Worker-pool runner; rows stream via `onRow`; throws at the first 401/403 instead of failing every record |
+| `src/input/records.ts` | JSONL / JSON / text / directory / stdin → `{ id, data }`; rejects an input whose ids repeat, since every reader joins on `id` |
+| `src/run/runner.ts` | Worker-pool runner; rows stream via `onRow`; throws at the first 401/403 instead of failing every record, and when `onRow` itself throws |
 | `src/run/report.ts` | Text report |
-| `src/analysis/` | `calibrate` (reliability bins, accuracy, Brier, ECE) and `stability` (largest pairwise difference per question) over rows on disk |
+| `src/analysis/` | `calibrate` (reliability bins, accuracy, Brier, ECE, a per-question count of truth values it could not score) and `stability` (largest pairwise difference per question) over rows on disk |
 
 ## The rules that matter
 
