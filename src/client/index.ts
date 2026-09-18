@@ -4,6 +4,7 @@
 export {
   JevClient,
   type JevClientOptions,
+  JevHttpError,
   type JevResult,
   PROVIDERS,
   type Provider,

@@ -66,6 +66,19 @@ describe('runExperiment', () => {
     expect(outcome.rows[0]?.input).toBeUndefined();
   });
 
+  test('stops at the first auth failure instead of failing every record', async () => {
+    let calls = 0;
+    const client = clientWith(() => {
+      calls += 1;
+      return new Response('{"error":{"message":"User not found."}}', { status: 401 });
+    });
+    const records = Array.from({ length: 50 }, (_, i) => ({ id: String(i), data: { text: 'x' } }));
+    await expect(runExperiment(client, experiment, records, { concurrency: 2 })).rejects.toThrow(
+      /401/,
+    );
+    expect(calls).toBeLessThanOrEqual(2);
+  });
+
   test('report tallies answers and derived fields', async () => {
     const client = clientWith(() => ok('billing', 0.2));
     const outcome = await runExperiment(client, experiment, [

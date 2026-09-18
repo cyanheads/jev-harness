@@ -29,7 +29,7 @@ import {
   stability,
   type Truth,
 } from '../src/analysis/index.ts';
-import { JevClient, type Provider, type State } from '../src/client/index.ts';
+import { JevClient, JevHttpError, type Provider, type State } from '../src/client/index.ts';
 import { listExperiments, loadExperiment } from '../src/experiments/index.ts';
 import { loadRecords } from '../src/input/index.ts';
 import { choice, noul, type Questions, score } from '../src/questions/index.ts';
@@ -147,6 +147,13 @@ switch (command) {
       onFailure: (f) => {
         process.stderr.write(`\n! ${f.id}: ${f.error}\n`);
       },
+    }).catch(async (error: unknown) => {
+      await writer.end();
+      if (!(error instanceof JevHttpError && error.isAuthFailure)) throw error;
+      console.error(
+        `\n${error.message}\nThe run stopped: the key was rejected. A key exported in the shell takes precedence over .env.`,
+      );
+      process.exit(1);
     });
     await writer.end();
     process.stderr.write('\n');

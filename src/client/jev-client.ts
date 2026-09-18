@@ -3,8 +3,9 @@
  *
  * HTTP client for Jev. One request shape (`{ model, state, questions }`) served
  * by two providers: OpenRouter's `/api/alpha/decisions` and TypeSafe's own
- * `/v1/systemone`. Retries 429/5xx with backoff, honors `retry-after`, validates
- * the response with Zod, and reports token usage, cost, and latency per call.
+ * `/v1/systemone`. Retries 429/5xx, timeouts, and dropped connections with
+ * backoff, honors `retry-after`, validates the response with Zod, and reports
+ * token usage, cost, and latency per call.
  */
 
 import { z } from 'zod';
@@ -65,6 +66,22 @@ const responseSchema = z.object({
 
 const RETRYABLE = new Set([429, 500, 502, 503, 524, 529]);
 
+/** A non-2xx answer from the provider, after retries. */
+export class JevHttpError extends Error {
+  readonly status: number;
+
+  constructor(provider: Provider, status: number, attempts: number, body: string) {
+    super(`Jev ${provider} ${status} after ${attempts} attempt(s): ${body.slice(0, 500)}`);
+    this.name = 'JevHttpError';
+    this.status = status;
+  }
+
+  /** The key is wrong or lacks access, so every other record would fail the same way. */
+  get isAuthFailure(): boolean {
+    return this.status === 401 || this.status === 403;
+  }
+}
+
 export class JevClient {
   readonly provider: Provider;
   readonly model: string;
@@ -106,12 +123,20 @@ export class JevClient {
     let attempt = 0;
     for (;;) {
       attempt += 1;
-      const res = await this.#fetch(this.url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${this.#apiKey}`, 'Content-Type': 'application/json' },
-        body,
-        signal: AbortSignal.timeout(this.#timeoutMs),
-      });
+      let res: Response;
+      try {
+        res = await this.#fetch(this.url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.#apiKey}`, 'Content-Type': 'application/json' },
+          body,
+          signal: AbortSignal.timeout(this.#timeoutMs),
+        });
+      } catch (error) {
+        // A timeout or a dropped connection is as transient as a 503.
+        if (attempt >= this.#maxAttempts) throw error;
+        await Bun.sleep(retryDelayMs(null, attempt));
+        continue;
+      }
       if (res.ok) {
         const parsed = responseSchema.parse(await res.json());
         for (const [id, question] of Object.entries(questions)) {
@@ -133,9 +158,7 @@ export class JevClient {
       }
       const text = await res.text();
       if (!RETRYABLE.has(res.status) || attempt >= this.#maxAttempts) {
-        throw new Error(
-          `Jev ${this.provider} ${res.status} after ${attempt} attempt(s): ${text.slice(0, 500)}`,
-        );
+        throw new JevHttpError(this.provider, res.status, attempt, text);
       }
       await Bun.sleep(retryDelayMs(res.headers.get('retry-after'), attempt));
     }

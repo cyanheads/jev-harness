@@ -7,7 +7,7 @@
  * stream them to JSONL; the report is computed from the collected rows.
  */
 
-import type { JevClient, JevResult } from '../client/index.ts';
+import { type JevClient, JevHttpError, type JevResult } from '../client/index.ts';
 import type { Experiment } from '../experiments/index.ts';
 import type { Record_ } from '../input/index.ts';
 import type { Answer } from '../questions/index.ts';
@@ -57,8 +57,11 @@ export async function runExperiment(
   const failures: RunFailure[] = [];
   let next = 0;
 
+  /** Set by the first auth failure: every remaining record would fail the same way. */
+  let fatal: JevHttpError | undefined;
+
   async function worker(): Promise<void> {
-    while (next < records.length) {
+    while (next < records.length && !fatal) {
       const record = records[next++];
       if (!record) return;
       try {
@@ -81,6 +84,10 @@ export async function runExperiment(
         rows.push(row);
         await options.onRow?.(row);
       } catch (error) {
+        if (error instanceof JevHttpError && error.isAuthFailure) {
+          fatal ??= error;
+          return;
+        }
         const failure = {
           id: record.id,
           error: error instanceof Error ? error.message : String(error),
@@ -92,5 +99,6 @@ export async function runExperiment(
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, records.length) }, worker));
+  if (fatal) throw fatal;
   return { rows, failures };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { choice, noul, score } from '../questions/index.ts';
-import { JevClient, retryDelayMs, stringifyEntries } from './index.ts';
+import { JevClient, JevHttpError, retryDelayMs, stringifyEntries } from './index.ts';
 
 const questions = {
   dept: choice('Which team?', { billing: 'Money', technical: 'Bugs', other: null }),
@@ -84,6 +84,26 @@ describe('JevClient', () => {
     const client = new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl });
     await expect(client.ask('x', questions)).rejects.toThrow(/422/);
     expect(calls).toHaveLength(1);
+  });
+
+  test('marks a 401 as an auth failure', async () => {
+    const { fetchImpl } = fakeFetch([{ status: 401, body: { error: 'User not found.' } }]);
+    const client = new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl });
+    const error = await client.ask('x', questions).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(JevHttpError);
+    expect((error as JevHttpError).isAuthFailure).toBe(true);
+  });
+
+  test('retries a dropped connection, then succeeds', async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError('socket hang up');
+      return Response.json(okBody);
+    }) as unknown as typeof fetch;
+    const client = new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl });
+    const result = await client.ask('x', questions);
+    expect(result.attempts).toBe(2);
   });
 
   test('rejects an answer outside the declared options', async () => {
