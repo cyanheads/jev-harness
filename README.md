@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
 
 </div>
 
