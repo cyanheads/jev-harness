@@ -3,7 +3,7 @@
  *
  * HTTP client for Jev. One request shape (`{ model, state, questions }`) served
  * by two providers: OpenRouter's `/api/alpha/decisions` and TypeSafe's own
- * `/v1/systemone`. Retries 429/5xx, timeouts, and dropped connections with
+ * `/v1/systemone`. Retries 408/429/5xx, timeouts, and dropped connections with
  * backoff, honors `retry-after`, validates the response with Zod, and reports
  * token usage, cost, and latency per call.
  */
@@ -136,7 +136,15 @@ export class JevClient {
         });
       } catch (error) {
         // A timeout or a dropped connection is as transient as a 503.
-        if (attempt >= this.#maxAttempts) throw error;
+        if (attempt >= this.#maxAttempts) {
+          const reason = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `Jev ${this.provider} request failed after ${attempt} attempt(s): ${reason}`,
+            {
+              cause: error,
+            },
+          );
+        }
         await Bun.sleep(retryDelayMs(null, attempt));
         continue;
       }
@@ -193,13 +201,16 @@ function parseResponse(text: string): z.infer<typeof responseSchema> {
 }
 
 /**
- * `retry-after` in seconds when present, capped at a minute, else exponential
- * backoff with jitter (0.5s, 1s, 2s…).
+ * `retry-after` when present — delay-seconds or an HTTP date — capped at a
+ * minute, else exponential backoff with jitter (0.5s, 1s, 2s…).
  */
-export function retryDelayMs(retryAfter: string | null, attempt: number): number {
-  const fromHeader = retryAfter === null ? Number.NaN : Number(retryAfter) * 1000;
-  if (Number.isFinite(fromHeader) && fromHeader >= 0) {
-    return Math.min(fromHeader, MAX_RETRY_DELAY_MS);
+export function retryDelayMs(retryAfter: string | null, attempt: number, now = Date.now()): number {
+  if (retryAfter !== null) {
+    const seconds = Number(retryAfter);
+    const fromHeader = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - now;
+    if (Number.isFinite(fromHeader) && fromHeader >= 0) {
+      return Math.min(fromHeader, MAX_RETRY_DELAY_MS);
+    }
   }
   return 500 * 2 ** (attempt - 1) + Math.random() * 250;
 }

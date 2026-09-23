@@ -126,6 +126,21 @@ describe('JevClient', () => {
     expect(result.attempts).toBe(2);
   });
 
+  test('names the provider and attempts when the connection never succeeds', async () => {
+    const fetchImpl = (async () => {
+      throw new TypeError('socket hang up');
+    }) as unknown as typeof fetch;
+    const client = new JevClient({
+      provider: 'openrouter',
+      apiKey: 'k',
+      fetch: fetchImpl,
+      maxAttempts: 1,
+    });
+    await expect(client.ask('x', questions)).rejects.toThrow(
+      'Jev openrouter request failed after 1 attempt(s): socket hang up',
+    );
+  });
+
   test('rejects an answer outside the declared options', async () => {
     const bad = structuredClone(okBody);
     bad.answers.dept.choice = 'sales';
@@ -158,6 +173,10 @@ describe('retryDelayMs', () => {
   });
   test('caps a long retry-after at a minute', () => {
     expect(retryDelayMs('3600', 1)).toBe(60_000);
+  });
+  test('reads a retry-after HTTP date', () => {
+    const now = Date.parse('Wed, 23 Sep 2026 12:00:00 GMT');
+    expect(retryDelayMs('Wed, 23 Sep 2026 12:00:05 GMT', 1, now)).toBe(5000);
   });
   test('falls back to exponential backoff', () => {
     const d = retryDelayMs(null, 3);
