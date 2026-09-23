@@ -75,4 +75,14 @@ describe('jev --dry-run', () => {
     ]);
     expect(JSON.parse(stdout).model).toBe('jev-9');
   });
+
+  test.each([
+    [['--noul', 'a=x?', '--noul', 'a=y?'], 'question id "a" is used twice'],
+    [['--noul', 'x?', '--choice', 'q1=pick|a,b'], 'question id "q1" is used twice'],
+    [['--choice', 'pick|a,a'], 'repeats an entry'],
+  ])('ask rejects %p', async (flags, message) => {
+    const { exitCode, stderr } = await jev(['ask', '--state', 'x', ...flags, '--dry-run']);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain(message);
+  });
 });

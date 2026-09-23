@@ -251,6 +251,7 @@ function parseAdHocQuestions(nouls: string[], choices: string[], scores: string[
     const eq = head.indexOf('=');
     const id = eq > 0 ? head.slice(0, eq).trim() : `q${n}`;
     const q = eq > 0 ? head.slice(eq + 1).trim() : head.trim();
+    if (Object.hasOwn(questions, id)) throw new Error(`question id "${id}" is used twice`);
     const list =
       bar < 0
         ? []
@@ -262,6 +263,8 @@ function parseAdHocQuestions(nouls: string[], choices: string[], scores: string[
     if (withList && list.length < 2) {
       throw new Error(`"${spec}" needs |a,b,... with at least two entries`);
     }
+    // A repeated choice option would collapse into one key.
+    if (new Set(list).size < list.length) throw new Error(`"${spec}" repeats an entry`);
     return { id, q, list };
   };
   for (const spec of nouls) {
