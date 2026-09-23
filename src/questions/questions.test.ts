@@ -8,6 +8,12 @@ describe('builders', () => {
     expect(Object.keys(q.criteria)).toEqual(['billing', 'technical']);
   });
 
+  test('choice rejects no options or more than 255', () => {
+    expect(() => choice('Which?', {})).toThrow(/got 0/);
+    const many = Object.fromEntries(Array.from({ length: 256 }, (_, i) => [`o${i}`, null]));
+    expect(() => choice('Which?', many)).toThrow(/got 256/);
+  });
+
   test('score rejects fewer than two or more than ten levels', () => {
     expect(() => score('How bad?', ['one'])).toThrow();
     expect(() =>

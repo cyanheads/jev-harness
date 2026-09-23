@@ -45,6 +45,10 @@ export function choice<const K extends string>(
   instructions: Entry,
   criteria: Readonly<Record<K, Entry>>,
 ): ChoiceQuestion<K> {
+  const options = Object.keys(criteria).length;
+  if (options === 0 || options > 255) {
+    throw new Error(`choice() needs 1–255 options, got ${options}`);
+  }
   return { type: 'choice', instructions, criteria };
 }
 
