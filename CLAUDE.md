@@ -1,6 +1,6 @@
 # jev-harness
 
-Bun/TypeScript harness for TypeSafe's Jev decision model. An **experiment** (`experiments/<name>.ts`) declares typed questions and a record → `state` mapper; `bun run jev run <name> --input <path>` sends every record to Jev through OpenRouter and writes JSONL rows plus a report to `results/`. Private repo, Claude-maintained; may become a production script.
+Bun/TypeScript harness for TypeSafe's Jev decision model. An **experiment** (`experiments/<name>.ts`) declares typed questions and a record → `state` mapper; `bun run jev run <name> --input <path>` sends every record to Jev through OpenRouter and writes JSONL rows plus a report to `results/`. Apache-2.0.
 
 **Orientation:** this file is the behavioral layer. `README.md` has the command table, env vars, and structure. `docs/jev-prompting.md` is the condensed guide to writing questions; the live TypeSafe docs ([index](https://docs.typesafe.ai/llms.txt)) are the source of truth and every doc page serves Markdown with `.md` appended.
 
@@ -46,8 +46,8 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 - **Keep the harness thin.** New capability goes in an experiment first; it moves into `src/` only when a second experiment needs it.
 - **`mcp-error-triage` has a downstream consumer.** RemoteSysAdmin's `scripts/triage-mcp-errors.ts` spawns `jev run mcp-error-triage` and reads `answers.origin`, `answers.message_clarity`, `derived.origin_disagrees`, and `derived.opaque_message` from the rows, joined on the record `id`. Renaming any of those, or the experiment, breaks it; change both repos together.
 - **Rows are the record of a run.** Don't add fields that bloat rows by default — `--keep-input` / `--keep-state` exist for that.
-- `.env` is gitignored and holds the only secrets. Never write a key with a file tool; open `.env` in an editor for Casey to paste.
-- **A shell-exported `OPENROUTER_API_KEY` wins over `.env`** (Bun does not override variables already in the environment). A stale export in `~/.config/zsh/secrets.zsh` stops the run at the first record with `401 {"error":{"message":"User not found."}}` even though `.env` is right. Diagnose with `bun -e 'console.log(process.env.OPENROUTER_API_KEY?.slice(-5))'` against the tail of the `.env` value; bypass with `env -u OPENROUTER_API_KEY bun run jev …`; fix by updating the export.
+- `.env` is gitignored and holds the only secrets. Never write a key with a file tool; open `.env` in an editor for the user to paste.
+- **A shell-exported `OPENROUTER_API_KEY` wins over `.env`** (Bun does not override variables already in the environment). A stale export in a shell startup file stops the run at the first record with `401 {"error":{"message":"User not found."}}` even though `.env` is right. Diagnose with `bun -e 'console.log(process.env.OPENROUTER_API_KEY?.slice(-5))'` against the tail of the `.env` value; bypass with `env -u OPENROUTER_API_KEY bun run jev …`; fix by updating the export.
 
 ## Where things live
 
@@ -72,4 +72,4 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 
 ## Commit stance
 
-Standing commit+push grant once `bun run check` is green — this is a Claude-owned private repo. Versioned: a release is a version bump in `package.json` + README badge, a `changelog/<series>/<version>.md` entry, `bun run changelog:build`, commit, annotated `vX.Y.Z` tag, push. No publish pipeline.
+Standing commit+push grant once `bun run check` is green. Versioned: a release is a version bump in `package.json` + README badge, a `changelog/<series>/<version>.md` entry, `bun run changelog:build`, commit, annotated `vX.Y.Z` tag, push. No publish pipeline.
