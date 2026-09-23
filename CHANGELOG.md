@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.4.1](changelog/0.4.x/0.4.1.md) — 2026-09-23
+
+A throwing sink stops the run instead of letting workers keep calling Jev, parse errors name the file and line, and repeated runs no longer share an output file.
+
 ## [0.4.0](changelog/0.4.x/0.4.0.md) — 2026-09-18 · ⚠️ Breaking
 
 CLI flags are validated, `--dry-run` previews the provider the real call would use, repeated record ids are rejected, and `calibrate` reports the truth values it could not score.

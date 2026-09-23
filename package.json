@@ -1,6 +1,6 @@
 {
   "name": "jev-harness",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "description": "Harness for TypeSafe's Jev decision model: typed questions over datasets via OpenRouter, JSONL answers, summary reports.",
@@ -47,11 +47,11 @@
     "changelog:check": "bun run scripts/build-changelog.ts --check"
   },
   "dependencies": {
-    "zod": "^4.5.4"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.10",
-    "@types/bun": "latest",
+    "@biomejs/biome": "^2.5.14",
+    "@types/bun": "^1.4.2",
     "typescript": "^7.0.2"
   }
 }
