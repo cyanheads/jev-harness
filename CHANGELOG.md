@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.4.3](changelog/0.4.x/0.4.3.md) — 2026-09-23
+
+`null` is typed out of instructions, Score levels, and Noul sides, where OpenRouter rejects it; the client no longer sends a null there as the string "null".
+
 ## [0.4.2](changelog/0.4.x/0.4.2.md) — 2026-09-23
 
 A blank retry-after no longer retries at once, `jev ask` rejects repeated question ids and options, and the report labels structured Score levels as JSON.
