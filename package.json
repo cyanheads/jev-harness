@@ -1,6 +1,6 @@
 {
   "name": "jev-harness",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "type": "module",
   "description": "Harness for TypeSafe's Jev decision model: typed questions over datasets via OpenRouter, JSONL answers, summary reports.",
@@ -17,6 +17,7 @@
     "typescript"
   ],
   "author": "Casey Hand <casey@caseyjhand.com>",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cyanheads/jev-harness.git"

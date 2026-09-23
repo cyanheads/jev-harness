@@ -5,7 +5,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-0.4.3-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/version-0.4.4-blue?style=flat-square)](./CHANGELOG.md) [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-%3E%3D1.3-000?style=flat-square&logo=bun&logoColor=white)](https://bun.sh/)
 
 </div>
 
@@ -109,4 +109,4 @@ bun run check
 
 ## License
 
-Private.
+This project is licensed under the Apache 2.0 License. See the [LICENSE](./LICENSE) file for details.

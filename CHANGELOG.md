@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.4.4](changelog/0.4.x/0.4.4.md) — 2026-09-23
+
+Licensed under Apache-2.0.
+
 ## [0.4.3](changelog/0.4.x/0.4.3.md) — 2026-09-23
 
 `null` is typed out of instructions, Score levels, and Noul sides, where OpenRouter rejects it; the client no longer sends a null there as the string "null".
