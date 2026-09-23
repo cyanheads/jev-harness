@@ -34,7 +34,7 @@ import {
 import { JevClient, JevHttpError, type Provider, type State } from '../src/client/index.ts';
 import { listExperiments, loadExperiment } from '../src/experiments/index.ts';
 import { loadRecords, readJsonl } from '../src/input/index.ts';
-import { choice, noul, type Questions, score } from '../src/questions/index.ts';
+import { choice, noul, type Question, type Questions, score } from '../src/questions/index.ts';
 import { type RunRow, renderReport, runExperiment } from '../src/run/index.ts';
 
 const USAGE = `usage:
@@ -140,8 +140,9 @@ async function main(): Promise<void> {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23);
       const outDir = resolve(values.out);
       await mkdir(outDir, { recursive: true });
-      const rowsPath = join(outDir, `${experiment.name}-${stamp}.jsonl`);
-      const reportPath = join(outDir, `${experiment.name}-${stamp}.report.txt`);
+      const base = join(outDir, `${experiment.name}-${stamp}`);
+      const rowsPath = `${base}.jsonl`;
+      const reportPath = `${base}.report.txt`;
       const writer = Bun.file(rowsPath).writer();
 
       /** Rows and failures both count: a run with failures still reaches N/N. */
@@ -192,8 +193,9 @@ async function main(): Promise<void> {
         ? await Bun.file(values.state.slice(1)).text()
         : values.state;
       const questions = parseAdHocQuestions(values.noul, values.choice, values.score);
-      if (Object.keys(questions).length === 0)
+      if (Object.keys(questions).length === 0) {
         throw new Error('ask needs at least one --noul/--choice/--score');
+      }
       if (values['dry-run']) {
         console.log(JSON.stringify(makeClient(true).payload(state, questions), null, 2));
         break;
@@ -240,22 +242,26 @@ async function main(): Promise<void> {
  * scores (ordered levels). The id is optional: `question|a,b` gets `q<N>`.
  */
 function parseAdHocQuestions(nouls: string[], choices: string[], scores: string[]): Questions {
-  const questions: Record<string, Questions[string]> = {};
+  const questions: Record<string, Question> = {};
   let n = 0;
   const split = (spec: string, withList: boolean): { id: string; q: string; list: string[] } => {
     n += 1;
-    const [head, listRaw] = withList ? splitLast(spec, '|') : [spec, ''];
+    const bar = withList ? spec.lastIndexOf('|') : -1;
+    const head = bar < 0 ? spec : spec.slice(0, bar);
     const eq = head.indexOf('=');
     const id = eq > 0 ? head.slice(0, eq).trim() : `q${n}`;
     const q = eq > 0 ? head.slice(eq + 1).trim() : head.trim();
-    const list = listRaw
-      ? listRaw
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    if (withList && list.length < 2)
+    const list =
+      bar < 0
+        ? []
+        : spec
+            .slice(bar + 1)
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+    if (withList && list.length < 2) {
       throw new Error(`"${spec}" needs |a,b,... with at least two entries`);
+    }
     return { id, q, list };
   };
   for (const spec of nouls) {
@@ -271,9 +277,4 @@ function parseAdHocQuestions(nouls: string[], choices: string[], scores: string[
     questions[id] = score(q, list);
   }
   return questions;
-}
-
-function splitLast(s: string, sep: string): [string, string] {
-  const i = s.lastIndexOf(sep);
-  return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)];
 }

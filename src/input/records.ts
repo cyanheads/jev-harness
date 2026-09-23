@@ -96,9 +96,8 @@ function fromJson(value: unknown): Record_[] {
 
 function withId(data: unknown, index: number): Record_ {
   if (typeof data === 'object' && data !== null) {
-    const own =
-      (data as { id?: unknown; requestId?: unknown }).id ??
-      (data as { requestId?: unknown }).requestId;
+    const { id, requestId } = data as { id?: unknown; requestId?: unknown };
+    const own = id ?? requestId;
     if (typeof own === 'string' || typeof own === 'number') return { id: String(own), data };
   }
   return { id: String(index), data };

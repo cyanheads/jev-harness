@@ -30,39 +30,33 @@ export function renderReport(experiment: Experiment, outcome: RunOutcome): strin
 
   for (const [id, question] of Object.entries(experiment.questions)) {
     lines.push('', `[${question.type}] ${id}`);
-    const answers = rows.map((r) => r.answers[id]).filter((a) => a !== undefined);
+    const answers = rows.map((r) => r.answers[id]);
     switch (question.type) {
       case 'choice': {
-        const counts = tally(answers.map((a) => (a.type === 'choice' ? a.choice : '?')));
-        const conf = answers.map((a) => (a.type === 'choice' ? a.confidence : 0));
+        const picked = answers.filter((a) => a?.type === 'choice');
+        const conf = picked.map((a) => a.confidence);
         lines.push(
           `  confidence mean ${mean(conf).toFixed(2)} · min ${Math.min(...conf).toFixed(2)}`,
         );
-        lines.push(...shareLines(counts, n));
+        lines.push(...shareLines(tally(picked.map((a) => a.choice)), n));
         break;
       }
       case 'score': {
-        const scores = answers.map((a) => (a.type === 'score' ? a.score : 0));
-        const conf = answers.map((a) => (a.type === 'score' ? a.confidence : 0));
+        const scored = answers.filter((a) => a?.type === 'score');
+        const scores = scored.map((a) => a.score);
+        const conf = scored.map((a) => a.confidence);
         lines.push(
           `  score mean ${mean(scores).toFixed(2)} of 0–${question.criteria.length - 1} · confidence mean ${mean(conf).toFixed(2)}`,
         );
-        const levels = tally(scores.map((s) => String(Math.round(s))));
-        lines.push(
-          ...shareLines(
-            Object.fromEntries(
-              Object.entries(levels).map(([k, v]) => [
-                `${k} ${String(question.criteria[Number(k)] ?? '')}`,
-                v,
-              ]),
-            ),
-            n,
-          ),
-        );
+        const levels = scores.map((s) => {
+          const level = Math.round(s);
+          return `${level} ${String(question.criteria[level] ?? '')}`;
+        });
+        lines.push(...shareLines(tally(levels), n));
         break;
       }
       case 'noul': {
-        const p = answers.map((a) => (a.type === 'noul' ? a.noul : 0));
+        const p = answers.filter((a) => a?.type === 'noul').map((a) => a.noul);
         const yes = p.filter((x) => x > 0.5).length;
         const unsure = p.filter((x) => x >= 0.35 && x <= 0.65).length;
         lines.push(
@@ -79,7 +73,7 @@ export function renderReport(experiment: Experiment, outcome: RunOutcome): strin
     for (const key of derivedKeys) {
       const values = rows.map((r) => r.derived?.[key]).filter((v) => v !== undefined);
       if (values.every((v) => typeof v === 'number')) {
-        lines.push(`  ${key}: mean ${mean(values as number[]).toFixed(3)}`);
+        lines.push(`  ${key}: mean ${mean(values).toFixed(3)}`);
       } else {
         lines.push(`  ${key}`, ...shareLines(tally(values.map(String)), n).map((l) => `  ${l}`));
       }

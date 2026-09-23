@@ -28,7 +28,7 @@ export function resolveExperimentPath(ref: string): string {
     resolve(EXPERIMENTS_DIR, ref),
     resolve(EXPERIMENTS_DIR, `${ref}.ts`),
   ];
-  const found = candidates.find((p) => existsSync(p) && p.endsWith('.ts'));
+  const found = candidates.find((p) => p.endsWith('.ts') && existsSync(p));
   if (!found) {
     throw new Error(`no experiment at "${ref}" — tried ${candidates.join(', ')}`);
   }

@@ -35,10 +35,11 @@ export function stability(runs: readonly (readonly RunRow[])[]): QuestionStabili
   for (const id of shared) {
     const rows = byId.map((m) => m.get(id) as RunRow);
     for (const question of Object.keys(rows[0]?.answers ?? {})) {
-      const answers = rows.map((r) => r.answers[question]);
-      if (answers.some((a) => a === undefined || a.type !== answers[0]?.type)) continue;
-      const present = answers as Answer[];
-      const head = present[0] as Answer;
+      const present = rows.map((r) => r.answers[question]).filter((a) => a !== undefined);
+      const head = present[0];
+      if (!head || present.length < rows.length || present.some((a) => a.type !== head.type)) {
+        continue;
+      }
       const entry = diffs.get(question) ?? { type: head.type, values: [], flips: 0 };
       entry.values.push(spread(present));
       if (head.type === 'choice') {
