@@ -37,7 +37,7 @@ Top-1 accuracy 97.9%, expected calibration error 0.039.
 
 ## Calibration: Noul flags against a labeling policy
 
-**Data:** the same 713 issues, five Noul flags (security, performance, regression, breaking change, blocked upstream). Truth is whether the label is on the issue after review.
+**Data:** the same issues, five Noul flags (security, performance, regression, breaking change, blocked upstream). Truth is whether the label is on the issue after review.
 
 | Stated probability | What happened |
 |:---|:---|
