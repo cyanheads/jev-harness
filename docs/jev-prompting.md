@@ -16,7 +16,7 @@ Jev does not generate text. It ingests `state` once and answers every question i
 6. **Score levels describe concrete situations**, in order, standing on their own. Use Score for "how much", Noul for "whether". A Noul at 0.5 means "equally likely yes or no", not "medium".
 7. **Criteria extend the instruction; never contradict it.** A Noul where `true` means "no" underperforms. Noul criteria are both sides or neither — OpenRouter rejects `{ false }` alone with a 400.
 8. **Point at state by path** in backticks: `` `ticket.messages[0].text` ``. Name fields in the state object; send only the fields the questions need. Irrelevant material lowers accuracy.
-9. **Structured entries when boundaries are close.** An option can be `{ what, not_for, examples }`. For a deep taxonomy, one Choice per level, walked in code. (The harness JSON-encodes structured entries for OpenRouter, which accepts strings only.)
+9. **Structured entries when boundaries are close.** An option can be `{ what, not_for, examples }`. For a deep taxonomy, one Choice per level, walked in code. (The harness JSON-encodes structured entries for OpenRouter, which accepts strings only.) `null` works only as a Choice option value, for an option that needs no description; OpenRouter rejects it as an instruction, a Score level, or a Noul side.
 10. **Keep in code:** counting, arithmetic, date comparison (have Jev pick month/day from enumerated options with a "not stated" choice, assemble in code), numeric encodings (convert hex colors to names first), and any generation (find candidates with a regex or an LLM, let Jev pick).
 
 ## Reading answers

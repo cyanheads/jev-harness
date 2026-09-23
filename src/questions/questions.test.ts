@@ -25,6 +25,16 @@ describe('builders', () => {
     expect(score('How bad?', ['low', 'high']).criteria).toHaveLength(2);
   });
 
+  test('null is typed out everywhere but a Choice option value', () => {
+    expect(choice('Which?', { a: null, b: null }).criteria).toEqual({ a: null, b: null });
+    // @ts-expect-error OpenRouter answers a null instruction with a 400
+    noul(null);
+    // @ts-expect-error OpenRouter answers a null Score level with a 400
+    score('How bad?', [null, 'high']);
+    // @ts-expect-error OpenRouter answers a null Noul side with a 400
+    noul('Urgent?', { true: null, false: 'no' });
+  });
+
   test('noul omits criteria when not given', () => {
     expect(noul('Urgent?')).toEqual({ type: 'noul', instructions: 'Urgent?' });
     expect(noul('Urgent?', { true: 'yes', false: 'no' }).criteria).toEqual({

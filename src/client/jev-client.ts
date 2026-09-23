@@ -221,37 +221,31 @@ export function retryDelayMs(retryAfter: string | null, attempt: number, now = D
  * structured entries are JSON-encoded on the wire. TypeSafe accepts them as-is.
  */
 export function stringifyEntries(questions: Questions): Record<string, Question> {
-  const asString = (entry: Entry | undefined): string | undefined =>
-    entry === undefined || typeof entry === 'string' ? entry : JSON.stringify(entry);
+  const asString = (entry: NonNullable<Entry>): string =>
+    typeof entry === 'string' ? entry : JSON.stringify(entry);
   const out: Record<string, Question> = {};
   for (const [id, q] of Object.entries(questions)) {
-    const instructions = asString(q.instructions) ?? '';
+    const instructions = asString(q.instructions);
     switch (q.type) {
       case 'choice':
         out[id] = {
           type: 'choice',
           instructions,
+          // A null option value is the one null OpenRouter accepts.
           criteria: Object.fromEntries(
             Object.entries(q.criteria).map(([k, v]) => [k, v === null ? null : asString(v)]),
-          ) as Record<string, Entry>,
+          ),
         };
         break;
       case 'score':
-        out[id] = {
-          type: 'score',
-          instructions,
-          criteria: q.criteria.map((c) => asString(c) ?? ''),
-        };
+        out[id] = { type: 'score', instructions, criteria: q.criteria.map(asString) };
         break;
       case 'noul':
         out[id] = q.criteria
           ? {
               type: 'noul',
               instructions,
-              criteria: {
-                true: asString(q.criteria.true) ?? '',
-                false: asString(q.criteria.false) ?? '',
-              },
+              criteria: { true: asString(q.criteria.true), false: asString(q.criteria.false) },
             }
           : { type: 'noul', instructions };
         break;

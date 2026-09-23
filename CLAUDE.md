@@ -40,7 +40,7 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 ## The rules that matter
 
 - **Questions and thresholds live in the experiment file.** Never scatter them into `src/`. The experiment file is the unit a human reviews.
-- **OpenRouter takes strings only** for `instructions` and criteria values, and a Noul `criteria` object must carry both `true` and `false` (one side alone is a 400). `stringifyEntries` JSON-encodes structured entries for that provider and the `NoulQuestion` type requires both sides; TypeSafe direct gets entries raw. Keep that split in the client, not in experiments.
+- **OpenRouter takes strings only** for `instructions` and criteria values, and a Noul `criteria` object must carry both `true` and `false` (one side alone is a 400). `null` is accepted only as a Choice option value; the question types enforce that. `stringifyEntries` JSON-encodes structured entries for that provider and the `NoulQuestion` type requires both sides; TypeSafe direct gets entries raw. Keep that split in the client, not in experiments.
 - **Never send the label in the state** when an experiment measures agreement with a carried label (`mcp-error-triage` keeps `errorClass` out of `state` and compares in `derive`).
 - **Pinned model by default.** `typesafe/jev-1.13` / `jev-1.13.0`. Don't switch the default to `jev-latest`; thresholds tuned on one version don't carry.
 - **Keep the harness thin.** New capability goes in an experiment first; it moves into `src/` only when a second experiment needs it.
