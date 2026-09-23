@@ -82,6 +82,27 @@ describe('runExperiment', () => {
     expect(failures).toEqual([]);
   });
 
+  test('a throwing sink stops the workers from taking more records', async () => {
+    let calls = 0;
+    const client = clientWith((body) => {
+      calls += 1;
+      return body.state === 'boom' ? new Response('nope', { status: 422 }) : ok('billing', 0.2);
+    });
+    const records = Array.from({ length: 20 }, (_, i) => ({
+      id: String(i),
+      data: { text: i === 0 ? 'boom' : 'x' },
+    }));
+    await expect(
+      runExperiment(client, experiment, records, {
+        concurrency: 1,
+        onFailure: () => {
+          throw new Error('disk full');
+        },
+      }),
+    ).rejects.toThrow('disk full');
+    expect(calls).toBe(1);
+  });
+
   test('stops at the first auth failure instead of failing every record', async () => {
     let calls = 0;
     const client = clientWith(() => {

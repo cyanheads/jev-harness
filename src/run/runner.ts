@@ -57,8 +57,21 @@ export async function runExperiment(
   const failures: RunFailure[] = [];
   let next = 0;
 
-  /** Set by the first auth failure: every remaining record would fail the same way. */
-  let fatal: JevHttpError | undefined;
+  /**
+   * Set by the first error that ends the run: an auth failure, after which every
+   * remaining record would fail the same way, or a sink that threw. Workers stop
+   * taking records; requests already in flight finish before the run rejects.
+   */
+  let fatal: { readonly error: unknown } | undefined;
+
+  /** A sink that cannot take a row or a failure ends the run, not the record. */
+  async function deliver(send: () => void | Promise<void>): Promise<void> {
+    try {
+      await send();
+    } catch (error) {
+      fatal ??= { error };
+    }
+  }
 
   async function worker(): Promise<void> {
     while (next < records.length && !fatal) {
@@ -84,7 +97,7 @@ export async function runExperiment(
         };
       } catch (error) {
         if (error instanceof JevHttpError && error.isAuthFailure) {
-          fatal ??= error;
+          fatal ??= { error };
           return;
         }
         const failure = {
@@ -92,16 +105,15 @@ export async function runExperiment(
           error: error instanceof Error ? error.message : String(error),
         };
         failures.push(failure);
-        await options.onFailure?.(failure);
+        await deliver(() => options.onFailure?.(failure));
         continue;
       }
-      // Outside the try: a sink that cannot take the row ends the run, not the record.
       rows.push(row);
-      await options.onRow?.(row);
+      await deliver(() => options.onRow?.(row));
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, records.length) }, worker));
-  if (fatal) throw fatal;
+  if (fatal) throw fatal.error;
   return { rows, failures };
 }
