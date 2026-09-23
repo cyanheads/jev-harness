@@ -34,6 +34,13 @@ describe('loadRecords', () => {
     await expect(loadRecords(path)).rejects.toThrow(/1 repeated record id\(s\): a/);
   });
 
+  test('names the file and line of a line that is not JSON', async () => {
+    const dir = await scratch();
+    const path = join(dir, 'cut.jsonl');
+    await writeFile(path, '{"id":"a"}\n\n{"id":"b","x":');
+    await expect(loadRecords(path)).rejects.toThrow(`${path}:3: `);
+  });
+
   test('text file: a single { text } record', async () => {
     const dir = await scratch();
     const path = join(dir, 'note.md');

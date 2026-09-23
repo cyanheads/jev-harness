@@ -43,15 +43,15 @@ async function readRecords(input: string): Promise<Record_[]> {
       const path = join(input, name);
       if (!(await stat(path)).isFile()) continue;
       const text = await readFile(path, 'utf8');
-      const data = extname(name) === '.json' ? JSON.parse(text) : { path, text };
+      const data = extname(name) === '.json' ? parseJson(text, path) : { path, text };
       records.push({ id: basename(name, extname(name)), data });
     }
     return records;
   }
   const text = await readFile(input, 'utf8');
   const ext = extname(input);
-  if (ext === '.jsonl' || ext === '.ndjson') return fromJsonl(text);
-  if (ext === '.json') return fromJson(JSON.parse(text));
+  if (ext === '.jsonl' || ext === '.ndjson') return parseJsonl(text, input).map(withId);
+  if (ext === '.json') return fromJson(parseJson(text, input));
   return [{ id: basename(input, ext), data: { text } }];
 }
 
@@ -65,15 +65,29 @@ function fromText(text: string, label: string): Record_[] {
     }
   }
   if (trimmed.length === 0) throw new Error(`${label} is empty`);
-  return fromJsonl(trimmed);
+  return parseJsonl(text, label).map(withId);
 }
 
-function fromJsonl(text: string): Record_[] {
-  return text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line, index) => withId(JSON.parse(line), index));
+/** A JSONL file's values in order, blank lines skipped. A bad line is named by path and line number. */
+export async function readJsonl(path: string): Promise<unknown[]> {
+  return parseJsonl(await readFile(path, 'utf8'), path);
+}
+
+function parseJsonl(text: string, label: string): unknown[] {
+  const values: unknown[] = [];
+  for (const [i, raw] of text.split('\n').entries()) {
+    const line = raw.trim();
+    if (line.length > 0) values.push(parseJson(line, `${label}:${i + 1}`));
+  }
+  return values;
+}
+
+function parseJson(text: string, where: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${where}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function fromJson(value: unknown): Record_[] {

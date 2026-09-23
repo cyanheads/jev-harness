@@ -33,7 +33,7 @@ import {
 } from '../src/analysis/index.ts';
 import { JevClient, JevHttpError, type Provider, type State } from '../src/client/index.ts';
 import { listExperiments, loadExperiment } from '../src/experiments/index.ts';
-import { loadRecords } from '../src/input/index.ts';
+import { loadRecords, readJsonl } from '../src/input/index.ts';
 import { choice, noul, type Questions, score } from '../src/questions/index.ts';
 import { type RunRow, renderReport, runExperiment } from '../src/run/index.ts';
 
@@ -136,27 +136,33 @@ async function main(): Promise<void> {
       }
 
       const client = makeClient();
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      // Milliseconds, so repeated runs started together (for `stability`) never share a file.
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23);
       const outDir = resolve(values.out);
       await mkdir(outDir, { recursive: true });
       const rowsPath = join(outDir, `${experiment.name}-${stamp}.jsonl`);
       const reportPath = join(outDir, `${experiment.name}-${stamp}.report.txt`);
       const writer = Bun.file(rowsPath).writer();
 
+      /** Rows and failures both count: a run with failures still reaches N/N. */
       let done = 0;
+      const progress = (): void => {
+        done += 1;
+        if (done % 25 === 0 || done === records.length) {
+          process.stderr.write(`\r${done}/${records.length}`);
+        }
+      };
       const outcome = await runExperiment(client, experiment, records, {
         concurrency: flags.concurrency,
         keepInput: values['keep-input'],
         keepState: values['keep-state'],
         onRow: (row) => {
           writer.write(`${JSON.stringify(row)}\n`);
-          done += 1;
-          if (done % 25 === 0 || done === records.length) {
-            process.stderr.write(`\r${done}/${records.length}`);
-          }
+          progress();
         },
         onFailure: (f) => {
           process.stderr.write(`\n! ${f.id}: ${f.error}\n`);
+          progress();
         },
       }).catch(async (error: unknown) => {
         await writer.end();
@@ -227,14 +233,6 @@ async function main(): Promise<void> {
       console.error(`unknown command "${command}"\n${USAGE}`);
       process.exit(1);
   }
-}
-
-async function readJsonl(path: string): Promise<unknown[]> {
-  const text = await Bun.file(path).text();
-  return text
-    .split('\n')
-    .filter((line) => line.trim() !== '')
-    .map((line) => JSON.parse(line));
 }
 
 /**
