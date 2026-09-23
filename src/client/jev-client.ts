@@ -205,7 +205,8 @@ function parseResponse(text: string): z.infer<typeof responseSchema> {
  * minute, else exponential backoff with jitter (0.5s, 1s, 2s…).
  */
 export function retryDelayMs(retryAfter: string | null, attempt: number, now = Date.now()): number {
-  if (retryAfter !== null) {
+  // `Number('')` is 0: a blank header would otherwise retry at once.
+  if (retryAfter !== null && retryAfter.trim() !== '') {
     const seconds = Number(retryAfter);
     const fromHeader = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - now;
     if (Number.isFinite(fromHeader) && fromHeader >= 0) {

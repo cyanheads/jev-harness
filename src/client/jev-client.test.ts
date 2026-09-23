@@ -183,4 +183,7 @@ describe('retryDelayMs', () => {
     expect(d).toBeGreaterThanOrEqual(2000);
     expect(d).toBeLessThan(2250);
   });
+  test('treats a blank retry-after as absent', () => {
+    expect(retryDelayMs(' ', 3)).toBeGreaterThanOrEqual(2000);
+  });
 });
