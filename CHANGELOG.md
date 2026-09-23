@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.4.2](changelog/0.4.x/0.4.2.md) — 2026-09-23
+
+A blank retry-after no longer retries at once, `jev ask` rejects repeated question ids and options, and the report labels structured Score levels as JSON.
+
 ## [0.4.1](changelog/0.4.x/0.4.1.md) — 2026-09-23
 
 A throwing sink stops the run instead of letting workers keep calling Jev, parse errors name the file and line, and repeated runs no longer share an output file.
