@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { JevClient } from '../client/index.ts';
 import { defineExperiment } from '../experiments/index.ts';
-import { choice, noul } from '../questions/index.ts';
+import { choice, noul, score } from '../questions/index.ts';
 import { renderReport, runExperiment } from './index.ts';
 
 const experiment = defineExperiment({
@@ -129,5 +129,27 @@ describe('runExperiment', () => {
     expect(report).toContain('[noul] urgent');
     expect(report).toContain('escalate');
     expect(report).toContain('len: mean 1.500');
+  });
+
+  test('report labels a structured score level as JSON', () => {
+    const scored = defineExperiment({
+      name: 'scored',
+      description: 'one score',
+      questions: { level: score('How bad?', ['fine', { label: 'broken' }]) },
+      state: () => 'x',
+    });
+    const row = {
+      id: '1',
+      experiment: 'scored',
+      model: 'm',
+      answers: {
+        level: { type: 'score', score: 1, legend: {}, probabilities: {}, confidence: 1 },
+      },
+      usage: { inputTokens: 1, outputTokens: 0 },
+      costUsd: 0,
+      latencyMs: 1,
+      attempts: 1,
+    } as const;
+    expect(renderReport(scored, { rows: [row], failures: [] })).toContain('1 {"label":"broken"}');
   });
 });

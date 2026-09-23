@@ -50,7 +50,8 @@ export function renderReport(experiment: Experiment, outcome: RunOutcome): strin
         );
         const levels = scores.map((s) => {
           const level = Math.round(s);
-          return `${level} ${String(question.criteria[level] ?? '')}`;
+          const label = question.criteria[level] ?? '';
+          return `${level} ${typeof label === 'string' ? label : JSON.stringify(label)}`;
         });
         lines.push(...shareLines(tally(levels), n));
         break;
