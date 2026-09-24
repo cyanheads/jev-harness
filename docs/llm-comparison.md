@@ -1,16 +1,16 @@
 # Planned: run an experiment through an LLM for comparison
 
-Not built. Tracked in [#1](https://github.com/cyanheads/jev-harness/issues/1).
+The `--via` half is not built; the diff half is `jev compare`. Tracked in [#1](https://github.com/cyanheads/jev-harness/issues/1).
 
 ## What
 
-A `--via <model>` flag on `jev run` that sends the same experiment (same `state`, same questions) to a chat model instead of Jev, so two result files can be diffed on the same records: agreement rate per Choice, mean absolute difference per Score and Noul, and cost and latency side by side.
+A `--via <model>` flag on `jev run` that sends the same experiment (same `state`, same questions) to a chat model instead of Jev, so the two result files can be diffed with `jev compare` on the same records: which records changed their answer per question, the mean shift per Score and Noul, and, from the two reports, cost and latency side by side.
 
 ## How it would work
 
 - A second client behind the same `ask(state, questions)` interface. It renders the questions into one structured-output request (a JSON schema with one property per question: an enum for Choice, an integer index for Score, a boolean for Noul) and maps the reply back into the harness's answer shape. Probabilities from an LLM are not calibrated, so `probabilities` and `confidence` would be filled with one-hot values and marked as such in the row.
 - OpenRouter already fronts the chat models, so the same key and base URL serve both paths.
-- A `jev compare <rows-a.jsonl> <rows-b.jsonl>` command joins two result files on `id` and prints the agreement table.
+- `jev compare <rows-a.jsonl> <rows-b.jsonl>` already joins two result files on `id` and prints the per-question changes; a one-hot LLM answer compares like any other.
 
 ## Why it is deferred
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { JevClient } from '../client/index.ts';
 import { defineExperiment } from '../experiments/index.ts';
 import { choice, noul, score } from '../questions/index.ts';
-import { renderReport, runExperiment } from './index.ts';
+import { type RunRow, renderReport, runExperiment } from './index.ts';
 
 const experiment = defineExperiment({
   name: 'test-exp',
@@ -151,5 +151,102 @@ describe('runExperiment', () => {
       attempts: 1,
     } as const;
     expect(renderReport(scored, { rows: [row], failures: [] })).toContain('1 {"label":"broken"}');
+  });
+
+  test('report notes a question whose answer barely varies, from 20 rows up', async () => {
+    const client = clientWith(() => ok('billing', 0.9));
+    const records = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({ id: String(i), data: { text: 'x' } }));
+    const many = renderReport(experiment, await runExperiment(client, experiment, records(20)));
+    expect(many).toContain('! one answer on 100.0% of rows');
+    expect(many).toContain('! yes on 100.0% of rows');
+    const few = renderReport(experiment, await runExperiment(client, experiment, records(19)));
+    expect(few).not.toContain('!');
+  });
+});
+
+describe('questions built per record', () => {
+  const perRecord = defineExperiment({
+    name: 'per-record',
+    description: 'options come from the record',
+    questions: (record: { text: string; options: string[] }) => ({
+      pick: choice('Which fits?', Object.fromEntries(record.options.map((o) => [o, null]))),
+    }),
+    state: (record) => record.text,
+    derive: (answers, record) => ({ first: answers.pick.choice === record.options[0] }),
+  });
+
+  /** Picks the first option it was offered, and records every option set it saw. */
+  function firstOptionClient(seen: string[][]): JevClient {
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const options = Object.keys(body.questions.pick.criteria);
+      seen.push(options);
+      return Response.json({
+        model: 'm',
+        answers: {
+          pick: {
+            type: 'choice',
+            choice: options[0],
+            probabilities: Object.fromEntries(options.map((o, i) => [o, i === 0 ? 1 : 0])),
+            confidence: 1,
+          },
+        },
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    }) as typeof fetch;
+    return new JevClient({ provider: 'openrouter', apiKey: 'k', fetch: fetchImpl, maxAttempts: 1 });
+  }
+
+  test('each record is asked over its own options', async () => {
+    const seen: string[][] = [];
+    const outcome = await runExperiment(
+      firstOptionClient(seen),
+      perRecord,
+      [
+        { id: 'a', data: { text: 'x', options: ['red', 'blue'] } },
+        { id: 'b', data: { text: 'y', options: ['cat', 'dog', 'eel'] } },
+      ],
+      { concurrency: 1 },
+    );
+    expect(seen).toEqual([
+      ['red', 'blue'],
+      ['cat', 'dog', 'eel'],
+    ]);
+    expect(outcome.rows.map((r) => r.derived)).toEqual([{ first: true }, { first: true }]);
+    const report = renderReport(perRecord, outcome);
+    expect(report).toContain('[choice] pick');
+    expect(report).toContain('red');
+    expect(report).toContain('cat');
+  });
+
+  test('a record that builds no questions fails on its own', async () => {
+    const outcome = await runExperiment(firstOptionClient([]), perRecord, [
+      { id: 'a', data: { text: 'x', options: [] } },
+    ]);
+    expect(outcome.rows).toEqual([]);
+    expect(outcome.failures[0]?.error).toContain('choice() needs 1–255 options');
+  });
+
+  test('a question asked of only some records says so in the report', () => {
+    const row = (id: string, answers: RunRow['answers']): RunRow => ({
+      id,
+      experiment: 'e',
+      model: 'm',
+      answers,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      costUsd: 0,
+      latencyMs: 0,
+      attempts: 1,
+    });
+    const report = renderReport(perRecord, {
+      rows: [
+        row('a', { extra: { type: 'noul', noul: 0.9 } }),
+        row('b', { other: { type: 'noul', noul: 0.1 } }),
+      ],
+      failures: [],
+    });
+    expect(report).toContain('[noul] extra — answered in 1 of 2 rows');
+    expect(report).toContain('yes (>0.5) 100.0%');
   });
 });

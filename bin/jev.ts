@@ -4,46 +4,54 @@
  *
  *   bun run jev run <experiment> --input <path|-> [--out results/] [--limit N]
  *                   [--concurrency 8] [--model M] [--provider openrouter|typesafe]
- *                   [--keep-input] [--keep-state] [--dry-run]
+ *                   [--keep-input] [--keep-state] [--resume <rows.jsonl>] [--dry-run]
  *   bun run jev ask --state <text|@file> [--noul "id=question"]...
  *                   [--choice "id=question|optA,optB"]... [--score "id=question|l0,l1,l2"]...
  *   bun run jev list
  *   bun run jev calibrate --rows <rows.jsonl> --truth <truth.jsonl> [--bins 10]
  *   bun run jev stability <rows.jsonl> <rows.jsonl>...
+ *   bun run jev compare <before.jsonl> <after.jsonl>
  *
  * `run` writes one JSONL row per record plus a `.report.txt` to --out and prints
- * the report. `ask` is for one-off pokes without writing an experiment file.
- * `--dry-run` prints the first request payload, for the provider and model the
- * real call would use, and exits without calling Jev.
+ * the report; `--resume` appends to an earlier run's rows instead, sending only
+ * the records it lacks. `ask` is for one-off pokes without writing an
+ * experiment file. `--dry-run` prints the first request payload, for the
+ * provider and model the real call would use, and exits without calling Jev.
  * `calibrate` checks a run's probabilities against known answers (truth lines are
- * `{"id": "...", "truth": {"<question>": "<option>" | true | false}}`); `stability`
- * compares repeated runs over the same records. Neither calls Jev.
+ * `{"id": "...", "truth": {"<question>": "<option>" | <level> | true | false}}`);
+ * `stability` compares repeated runs over the same records; `compare` shows what
+ * changed between two runs. None of the three calls Jev.
  */
 
+import { appendFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import {
   calibrate,
+  compare,
   renderCalibration,
+  renderComparison,
   renderStability,
   stability,
   truthLineSchema,
 } from '../src/analysis/index.ts';
 import { JevClient, JevHttpError, type Provider, type State } from '../src/client/index.ts';
-import { listExperiments, loadExperiment } from '../src/experiments/index.ts';
+import { listExperiments, loadExperiment, questionsFor } from '../src/experiments/index.ts';
 import { loadRecords, readJsonl } from '../src/input/index.ts';
 import { choice, noul, type Question, type Questions, score } from '../src/questions/index.ts';
 import { type RunRow, renderReport, runExperiment } from '../src/run/index.ts';
 
 const USAGE = `usage:
   jev run <experiment> --input <path|-> [--out results/] [--limit N] [--concurrency 8]
-          [--model M] [--provider openrouter|typesafe] [--keep-input] [--keep-state] [--dry-run]
+          [--model M] [--provider openrouter|typesafe] [--keep-input] [--keep-state]
+          [--resume <rows.jsonl>] [--dry-run]
   jev ask --state <text|@file> [--noul "id=q"]... [--choice "id=q|a,b"]... [--score "id=q|l0,l1"]...
   jev list
   jev calibrate --rows <rows.jsonl> --truth <truth.jsonl> [--bins 10]
-  jev stability <rows.jsonl> <rows.jsonl>...`;
+  jev stability <rows.jsonl> <rows.jsonl>...
+  jev compare <before.jsonl> <after.jsonl>`;
 
 /** The flags that are not free text. `parseArgs` hands every one over as a string. */
 const flagsSchema = z.object({
@@ -79,6 +87,7 @@ async function main(): Promise<void> {
       provider: { type: 'string' },
       'keep-input': { type: 'boolean', default: false },
       'keep-state': { type: 'boolean', default: false },
+      resume: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       state: { type: 'string' },
       noul: { type: 'string', multiple: true, default: [] },
@@ -119,31 +128,42 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       const experiment = await loadExperiment(ref);
-      const records = (await loadRecords(values.input)).slice(0, flags.limit);
-      const first = records[0];
-      if (!first) throw new Error(`no records in ${values.input}`);
+      const loaded = (await loadRecords(values.input)).slice(0, flags.limit);
+      if (loaded.length === 0) throw new Error(`no records in ${values.input}`);
+      const prior = values.resume ? await readPriorRows(values.resume, experiment.name) : [];
+      const answered = new Set(prior.map((r) => r.id));
+      const records = loaded.filter((r) => !answered.has(r.id));
+      if (values.resume) {
+        console.error(
+          `resuming: ${prior.length} row(s) on disk, ${records.length} record(s) to send`,
+        );
+      }
 
       if (values['dry-run']) {
-        console.log(
-          JSON.stringify(
-            makeClient(true).payload(experiment.state(first.data), experiment.questions),
-            null,
-            2,
-          ),
-        );
+        const first = records[0];
+        if (first) {
+          const payload = makeClient(true).payload(
+            experiment.state(first.data),
+            questionsFor(experiment, first.data),
+          );
+          console.log(JSON.stringify(payload, null, 2));
+        }
         console.error(`\n${records.length} record(s) would be sent. Dry run — nothing called.`);
         break;
       }
 
       const client = makeClient();
-      // Milliseconds, so repeated runs started together (for `stability`) never share a file.
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23);
-      const outDir = resolve(values.out);
-      await mkdir(outDir, { recursive: true });
-      const base = join(outDir, `${experiment.name}-${stamp}`);
-      const rowsPath = `${base}.jsonl`;
-      const reportPath = `${base}.report.txt`;
-      const writer = Bun.file(rowsPath).writer();
+      let rowsPath: string;
+      if (values.resume) {
+        rowsPath = resolve(values.resume);
+      } else {
+        // Milliseconds, so repeated runs started together (for `stability`) never share a file.
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23);
+        const outDir = resolve(values.out);
+        await mkdir(outDir, { recursive: true });
+        rowsPath = join(outDir, `${experiment.name}-${stamp}.jsonl`);
+      }
+      const reportPath = `${rowsPath.replace(/\.jsonl$/, '')}.report.txt`;
 
       /** Rows and failures both count: a run with failures still reaches N/N. */
       let done = 0;
@@ -157,26 +177,28 @@ async function main(): Promise<void> {
         concurrency: flags.concurrency,
         keepInput: values['keep-input'],
         keepState: values['keep-state'],
+        // Appended synchronously, one line per row: a run that dies loses nothing it finished.
         onRow: (row) => {
-          writer.write(`${JSON.stringify(row)}\n`);
+          appendFileSync(rowsPath, `${JSON.stringify(row)}\n`);
           progress();
         },
         onFailure: (f) => {
           process.stderr.write(`\n! ${f.id}: ${f.error}\n`);
           progress();
         },
-      }).catch(async (error: unknown) => {
-        await writer.end();
+      }).catch((error: unknown) => {
         if (!(error instanceof JevHttpError && error.isAuthFailure)) throw error;
         console.error(
           `\n${error.message}\nThe run stopped: the key was rejected. A key exported in the shell takes precedence over .env.`,
         );
         process.exit(1);
       });
-      await writer.end();
       process.stderr.write('\n');
 
-      const report = renderReport(experiment, outcome);
+      const report = renderReport(experiment, {
+        rows: [...prior, ...outcome.rows],
+        failures: outcome.failures,
+      });
       await Bun.write(reportPath, `${report}\n`);
       console.log(report);
       console.log(`\nrows: ${rowsPath}\nreport: ${reportPath}`);
@@ -231,10 +253,31 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'compare': {
+      const [before, after] = rest;
+      if (!before || !after || rest.length > 2) {
+        console.error(USAGE);
+        process.exit(1);
+      }
+      const [runA, runB] = await Promise.all([readJsonl(before), readJsonl(after)]);
+      console.log(renderComparison(compare(runA as RunRow[], runB as RunRow[]), [before, after]));
+      break;
+    }
+
     default:
       console.error(`unknown command "${command}"\n${USAGE}`);
       process.exit(1);
   }
+}
+
+/** The rows of an earlier run of `experiment`, which `--resume` appends to. */
+async function readPriorRows(path: string, experiment: string): Promise<RunRow[]> {
+  const rows = (await readJsonl(path)) as RunRow[];
+  const other = rows.find((r) => r.experiment !== experiment);
+  if (other) {
+    throw new Error(`${path} holds rows of experiment "${other.experiment}", not "${experiment}"`);
+  }
+  return rows;
 }
 
 /**

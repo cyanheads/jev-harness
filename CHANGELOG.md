@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.5.0](changelog/0.5.x/0.5.0.md) — 2026-09-23
+
+Questions built per record, `jev compare` for before/after runs, a threshold sweep and Score scoring in `calibrate`, and `--resume` for an interrupted run.
+
 ## [0.4.4](changelog/0.4.x/0.4.4.md) — 2026-09-23
 
 Licensed under Apache-2.0.

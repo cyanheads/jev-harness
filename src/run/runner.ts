@@ -2,13 +2,13 @@
  * src/run/runner.ts
  *
  * Run one experiment over a list of records with bounded concurrency. Each
- * record becomes one Jev request (all the experiment's questions, in parallel
- * on the provider side). Rows are yielded as they complete so the CLI can
+ * record becomes one Jev request (all the experiment's questions for that
+ * record, in parallel on the provider side). Rows are yielded as they complete so the CLI can
  * stream them to JSONL; the report is computed from the collected rows.
  */
 
 import { type JevClient, JevHttpError, type JevResult } from '../client/index.ts';
-import type { Experiment } from '../experiments/index.ts';
+import { type Experiment, questionsFor } from '../experiments/index.ts';
 import type { Record_ } from '../input/index.ts';
 import type { Answer } from '../questions/index.ts';
 
@@ -80,7 +80,7 @@ export async function runExperiment(
       let row: RunRow;
       try {
         const state = experiment.state(record.data);
-        const result = await client.ask(state, experiment.questions);
+        const result = await client.ask(state, questionsFor(experiment, record.data));
         const derived = experiment.derive?.(result.answers, record.data);
         row = {
           id: record.id,

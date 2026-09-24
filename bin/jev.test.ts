@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { resolve } from 'node:path';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '..');
 
@@ -74,6 +76,54 @@ describe('jev --dry-run', () => {
       '--dry-run',
     ]);
     expect(JSON.parse(stdout).model).toBe('jev-9');
+  });
+
+  test('builds per-record questions for the first record', async () => {
+    const { exitCode, stdout } = await jev([
+      'run',
+      'tool-ranking',
+      '--input',
+      'samples/tool-queries.jsonl',
+      '--dry-run',
+    ]);
+    expect(exitCode).toBe(0);
+    const payload = JSON.parse(stdout);
+    expect(payload.state).toEqual({ request: 'Will it snow in Denver this weekend?' });
+    expect(Object.keys(payload.questions.tool.criteria)).toContain('weather_get_forecast');
+  });
+
+  test('--resume sends only the records the rows file lacks', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'jev-resume-'));
+    const rows = join(dir, 'prior.jsonl');
+    await Bun.write(rows, '{"id":"t1","experiment":"ticket-routing"}\n');
+    const { exitCode, stderr } = await jev([
+      'run',
+      'ticket-routing',
+      '--input',
+      'samples/tickets.jsonl',
+      '--resume',
+      rows,
+      '--dry-run',
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain('resuming: 1 row(s) on disk, 4 record(s) to send');
+  });
+
+  test('--resume refuses the rows of another experiment', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'jev-resume-'));
+    const rows = join(dir, 'prior.jsonl');
+    await Bun.write(rows, '{"id":"t1","experiment":"mcp-error-triage"}\n');
+    const { exitCode, stderr } = await jev([
+      'run',
+      'ticket-routing',
+      '--input',
+      'samples/tickets.jsonl',
+      '--resume',
+      rows,
+      '--dry-run',
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('not "ticket-routing"');
   });
 
   test.each([

@@ -49,7 +49,7 @@ Kill criteria: the probe rediscovers none of the known issues, or every new hit 
 
 ## If it proves out
 
-A development script in `mcp-ts-core` (working name `probe:descriptions`), run on demand, never inside `devcheck`: it needs a paid API key, makes network calls, and its output is advisory. It would discover definitions the way `lint:mcp` does, read a per-server `tests/intents.jsonl`, call Jev through this harness, and print the confusion matrix and the margin diff against a stored baseline. That requires this repo to be public and installable first, and an intent-file convention servers can adopt gradually.
+A development script in `mcp-ts-core` (working name `probe:descriptions`), run on demand, never inside `devcheck`: it needs a paid API key, makes network calls, and its output is advisory. It would discover definitions the way `lint:mcp` does, read a per-server `tests/intents.jsonl`, call Jev through this harness, and print the confusion matrix and the margin diff against a stored baseline. This repo is public but not on npm, so the script would link it with `bun link`; it also needs an intent-file convention servers can adopt gradually. Inside this harness, the probe is one experiment whose Choice options are built from each record's tool list, like `experiments/tool-ranking.ts`.
 
 ## Open questions
 

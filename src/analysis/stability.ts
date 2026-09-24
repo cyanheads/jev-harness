@@ -62,7 +62,7 @@ export function stability(runs: readonly (readonly RunRow[])[]): QuestionStabili
 }
 
 /** Largest difference across runs of the quantity that defines the answer. */
-function spread(answers: readonly Answer[]): number {
+export function spread(answers: readonly Answer[]): number {
   const series: number[][] = [];
   const head = answers[0];
   if (head?.type === 'choice') {

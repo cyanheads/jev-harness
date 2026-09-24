@@ -14,28 +14,30 @@ Bun ≥1.3, TypeScript strict (`noUncheckedIndexedAccess`, `verbatimModuleSyntax
 |:---|:---|:---|
 | Payload preview | `bun run jev run <exp> --input <path> --dry-run` | No key needed; prints the first request |
 | Run | `bun run jev run <exp> --input <path>` | Needs `OPENROUTER_API_KEY` in `.env`; exit code 2 if any record failed, 1 if the key was rejected |
+| Resume | `bun run jev run <exp> --input <path> --resume <rows>` | Sends only the records the rows file lacks (failures included), appends, rewrites the report over all rows |
 | One-off | `bun run jev ask --state "..." --noul "..." --choice "id=q\|a,b"` | Ad-hoc questions, JSON result to stdout |
 | List | `bun run jev list` | Experiments under `experiments/` |
-| Calibrate | `bun run jev calibrate --rows <rows> --truth <truth>` | Offline; truth lines are `{id, truth: {question: option \| boolean}}` |
+| Calibrate | `bun run jev calibrate --rows <rows> --truth <truth>` | Offline; truth lines are `{id, truth: {question: option \| level \| boolean}}`; prints a threshold sweep per question |
 | Stability | `bun run jev stability <rows> <rows>...` | Offline; same records sent more than once |
+| Compare | `bun run jev compare <before> <after>` | Offline; what changed after a rewrite, model bump, or state change. Re-measure every question rewrite with it |
 
 Results land in `results/` (gitignored). The row's `model` field is the versioned ID that answered — log it when comparing runs.
 
 ## Architecture
 
-Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → typed answers → `experiment.derive(answers, record)` → JSONL row; `renderReport` tallies the rows.
+Record → `experiment.state(record)` → `JevClient.ask(state, questionsFor(experiment, record))` → typed answers → `experiment.derive(answers, record)` → JSONL row; `renderReport` tallies the rows. `questions` is an object, or a function of the record when options come from the record (`experiments/tool-ranking.ts`); one request per record either way.
 
 | Path | Role |
 |:---|:---|
 | `bin/jev.ts` | CLI (`node:util` `parseArgs`, typed flags through a Zod schema); `run` / `ask` / `list` / `calibrate` / `stability` |
 | `src/client/jev-client.ts` | Both providers, retry on 408/429/5xx/timeouts honoring `retry-after` up to a minute, `JevHttpError` for a non-2xx answer, Zod response validation, cost from input tokens |
 | `src/questions/questions.ts` | `choice` / `score` / `noul` builders; `AnswersFor<Qs>` infers answer types from the question map |
-| `src/experiments/experiment.ts` | `defineExperiment`; `state`/`derive` are method signatures so typed experiments assign to the runner's `Experiment` |
+| `src/experiments/experiment.ts` | `defineExperiment` and `questionsFor`; `state`/`derive` are method signatures, and `QuestionsBuilder` a method-derived type, so typed experiments assign to the runner's `Experiment` |
 | `src/experiments/load-experiment.ts` | Resolves a path or bare name under `experiments/` |
 | `src/input/records.ts` | JSONL / JSON / text / directory / stdin → `{ id, data }`; rejects an input whose ids repeat, since every reader joins on `id`; `readJsonl` (rows, truth files) names the path and line of a bad line |
 | `src/run/runner.ts` | Worker-pool runner; rows stream via `onRow`; stops taking records and throws at the first 401/403 instead of failing every record, and when `onRow` or `onFailure` throws |
-| `src/run/report.ts` | Text report |
-| `src/analysis/` | `calibrate` (reliability bins, accuracy, Brier, ECE, a per-question count of truth values it could not score) and `stability` (largest pairwise difference per question) over rows on disk |
+| `src/run/report.ts` | Text report; question ids come from the answers when questions are built per record; `!` notes flag a question whose answer barely varies |
+| `src/analysis/` | `calibrate` (reliability bins, accuracy, Brier, ECE, threshold sweep, Score level error, a per-question count of truth values it could not score), `stability` (largest pairwise difference per question), and `compare` (directional before/after diff with the changed records) over rows on disk |
 
 ## The rules that matter
 
@@ -64,7 +66,8 @@ Record → `experiment.state(record)` → `JevClient.ask(state, questions)` → 
 
 | When the ask is | Do this |
 |:---|:---|
-| "new experiment for X", "try Jev on X" | Copy `experiments/ticket-routing.ts`, write the `state` mapper for X's record shape, read `docs/jev-prompting.md` before writing questions, `--dry-run` first |
+| "new experiment for X", "try Jev on X" | Copy `experiments/ticket-routing.ts` (or `tool-ranking.ts` when options come from the record), write the `state` mapper for X's record shape, read `docs/jev-prompting.md` before writing questions, `--dry-run` first |
+| "I reworded a question", "did the change help" | Run again over the same input, then `jev compare <before> <after>`; with labels, `calibrate` both |
 | "run X on this data" | `bun run jev run <exp> --input <path>`; report the printed summary and the two result paths |
 | "compare with Claude/GPT" | Not built — `docs/llm-comparison.md` and the tracking issue; don't improvise a chat-completions path |
 | "switch to TypeSafe direct" | `JEV_PROVIDER=typesafe` + `TYPESAFE_API_KEY` in `.env`; nothing else changes |
